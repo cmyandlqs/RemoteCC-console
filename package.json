@@ -1,0 +1,16 @@
+{
+  "name": "remotecc-console-spikes",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "spike:sdk-health": "node scripts/spike-sdk/01-health-check.mjs",
+    "spike:approval-bridge": "node scripts/spike-sdk/04-approval-bridge.mjs",
+    "spike:user-input-bridge": "node scripts/spike-sdk/05-user-input-bridge.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.144",
+    "@anthropic-ai/sdk": "^0.96.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  }
+}

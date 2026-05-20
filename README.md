@@ -13,7 +13,24 @@ Agent Console Mobile 是一个面向 AI Coding 重度用户的移动端远程控
 
 ## 当前项目状态
 
-当前阶段：`需求定义 + 技术路线确认 + 预研归档 + UI 设计准备 + 工程骨架初始化`
+当前阶段：`后端 MVP 开发完成，前端对接待启动`
+
+后端 Daemon 已完成 MVP 全部 8 个开发阶段（详见 `doc/backend-dev-plan.md`）：
+
+1. SQLite 持久化 + 基础中间件
+2. Host 状态检测
+3. Claude CLI Adapter
+4. WebSocket 事件管道
+5. Session Worker & 会话生命周期
+6. 审批系统
+7. Git & 文件变更
+8. 认证 & 安全
+
+下一步计划：
+
+1. 前端骨架对接 daemon API（local-admin 项目管理页 + mobile-web 会话页）
+2. WebSocket 事件消费与实时 UI 更新
+3. 真实 Linux Host + Tailscale 部署验证
 
 当前结论已经基本稳定：
 
@@ -219,23 +236,73 @@ apps/
   mobile-web/
 packages/
   claude-adapter/
+  shared-types/
 doc/
   prd.md
   dev-path-a.md
   frontend-dev.md
   backend-dev.md
+  backend-dev-plan.md
   phase0-research-archive.md
   ui-image-prompts.md
 ```
 
-当前骨架的性质：
+当前各模块状态：
 
-1. `apps/daemon`：Fastify + WebSocket 最小可扩展服务骨架
+1. `apps/daemon`：完整后端 Daemon，SQLite 持久化 + Claude CLI 集成 + WebSocket 事件流
 2. `apps/local-admin`：React + Vite 的本地管理页静态骨架
 3. `apps/mobile-web`：React + Vite + PWA 的手机端静态骨架
-4. `packages/claude-adapter`：Claude 集成适配层接口骨架
+4. `packages/claude-adapter`：Claude CLI 集成适配层（基于 `claude -p --output-format stream-json`）
+5. `packages/shared-types`：WebSocket 事件类型定义
 
-这一步的目标是先把模块边界、目录和启动入口定住，而不是一次把所有业务实现写完。
+### Daemon 已实现能力
+
+- **持久化**：Drizzle ORM + SQLite，6 张表（projects, sessions, session_events, approval_requests, file_changes, device_bindings）
+- **Claude 集成**：通过 CLI `stream-json` 模式实现结构化事件流，支持会话创建、恢复、消息发送
+- **实时事件**：WebSocket 网关，EventBus pub/sub，支持 session 级别订阅
+- **审批系统**：审批请求捕获 → SQLite 存储 → WS 广播 → 拒绝/忽略回传
+- **Git 集成**：项目级 git status / diff 读取
+- **认证安全**：设备绑定 token 机制，本机管理面 / 远程控制面分离
+- **Host 自检**：启动时检测 Claude auth 和 Tailscale 状态
+
+### API 总览
+
+| 端点 | 说明 |
+|---|---|
+| `GET /api/host/info` | 主机信息（hostname, OS, Claude auth, Tailscale） |
+| `GET /api/host/health` | 健康检查 |
+| `GET/POST/PATCH/DELETE /api/projects[/:id]` | 项目 CRUD |
+| `POST /api/projects/:id/sessions` | 创建会话（含 prompt，触发 Claude） |
+| `POST /api/sessions/:id/message` | 发送消息 |
+| `POST /api/sessions/:id/stop` | 停止会话 |
+| `POST /api/sessions/:id/rename` | 重命名 |
+| `GET /api/approvals/pending` | 待处理审批 |
+| `POST /api/approvals/:id/respond` | 拒绝/忽略审批 |
+| `GET /api/projects/:id/git-status` | Git 状态 |
+| `GET /api/projects/:id/diff` | Git diff |
+| `GET /api/sessions/:id/file-changes` | 会话文件变更 |
+| `POST /api/pairing/create` | 生成配对 token（仅本机） |
+| `POST /api/pairing/confirm` | 手机端确认绑定 |
+| `GET /ws` | WebSocket 事件流 |
+
+### 开发命令
+
+```bash
+# 类型检查
+npm run typecheck
+
+# 启动 Daemon 开发服务器
+npm run dev:daemon
+
+# 启动前端开发服务器
+npm run dev:local-admin   # :4173
+npm run dev:mobile-web    # :4174
+```
+
+Daemon 启动后自动：
+- 创建 `~/.agent-console/` 数据目录
+- 初始化 SQLite 数据库（`~/.agent-console/data/remotecc.db`）
+- 检测 Claude 认证状态和 Tailscale 状态
 
 ## UI 参考图说明
 
@@ -253,28 +320,9 @@ doc/
 2. 将筛选后的参考图放入 `UI参考图/`
 3. 再根据参考图补充最终页面结构和交互细节
 
-## 下一步计划
-
-建议按下面的顺序推进：
-
-1. 先完成 UI 方向确认  
-   基于 `doc/ui-image-prompts.md` 生成多轮设计图，筛选出主机端和手机端各自的视觉基线。
-
-2. 将 UI 结构回填到现有前端骨架  
-   先完善 `apps/local-admin` 和 `apps/mobile-web` 的页面结构、组件层次和状态占位。
-
-3. 接入 daemon 真实数据  
-   先打通 Host 状态、项目注册、会话列表这三条最短链路。
-
-4. 接入 Claude Adapter  
-   先实现会话创建、恢复、输出流、审批拒绝。
-
-5. 接入持久化和真实部署验证  
-   补齐 SQLite、日志、真实 Linux Host + Tailscale 联调。
-
 ## 本地开发建议
 
-当前仓库已经切回“文档与实现同仓库”的模式。
+当前仓库已经切回"文档与实现同仓库"的模式。
 
 建议后续保持：
 

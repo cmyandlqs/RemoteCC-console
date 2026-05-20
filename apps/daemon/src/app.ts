@@ -38,12 +38,12 @@ export async function buildServer() {
   const eventBus = new EventBus();
   const adapter = new CliClaudeAdapter();
 
-  const projectService = new ProjectService(db);
+  const gitService = new GitService();
+  const projectService = new ProjectService(db, gitService);
   const sessionService = new SessionService(db);
   const hostService = new HostService(sessionService);
   const approvalService = new ApprovalService(db, eventBus);
   const fileChangeService = new FileChangeService(db, eventBus);
-  const gitService = new GitService();
   const authService = new AuthService(db);
   const supervisor = new SessionSupervisor(
     sessionService,
@@ -86,7 +86,7 @@ export async function buildServer() {
   await registerSessionRoutes(app, projectService, sessionService, supervisor);
   await registerApprovalRoutes(app, approvalService);
   await registerGitRoutes(app, projectService, gitService, fileChangeService);
-  await registerRealtimeRoutes(app, eventBus);
+  await registerRealtimeRoutes(app, eventBus, authService);
 
   app.addHook("onClose", async () => {
     app.log.info("Closing database connection");

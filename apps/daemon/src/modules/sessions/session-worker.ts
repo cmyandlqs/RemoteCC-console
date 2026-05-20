@@ -32,7 +32,12 @@ export class SessionWorker {
     this.abortController = new AbortController();
 
     try {
-      const stream = this.adapter.sendMessage(this.cwd, prompt);
+      const stream = this.adapter.sendMessage(
+        this.cwd,
+        prompt,
+        undefined,
+        this.abortController.signal,
+      );
 
       for await (const event of stream) {
         if (this.abortController.signal.aborted) break;
@@ -65,6 +70,7 @@ export class SessionWorker {
         this.cwd,
         prompt,
         externalSessionId,
+        this.abortController.signal,
       );
 
       for await (const event of stream) {

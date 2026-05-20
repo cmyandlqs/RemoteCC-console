@@ -1,3 +1,4 @@
+import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 import { eq } from "drizzle-orm";
@@ -5,6 +6,7 @@ import { v7 as uuidv7 } from "uuid";
 
 import type { AppDatabase } from "../../infra/database.js";
 import { projects, sessions, fileChanges, sessionEvents, approvalRequests } from "../../infra/schema.js";
+import type { GitService } from "../git/git-service.js";
 
 export type ProjectRecord = {
   id: string;
@@ -14,6 +16,8 @@ export type ProjectRecord = {
   isEnabled: boolean;
   createdAt: string;
   updatedAt: string;
+  gitBranch: string | null;
+  uncommittedChanges: number;
 };
 
 export class ProjectServiceError extends Error {
@@ -33,10 +37,38 @@ export class ProjectServiceError extends Error {
 }
 
 export class ProjectService {
-  constructor(private readonly db: AppDatabase) {}
+  constructor(
+    private readonly db: AppDatabase,
+    private readonly gitService?: GitService,
+  ) {}
 
-  list(): ProjectRecord[] {
-    return this.db.select().from(projects).all();
+  private async enrichWithGit(record: typeof projects.$inferSelect): Promise<ProjectRecord> {
+    if (!this.gitService || !record.isGitRepo) {
+      return {
+        ...record,
+        gitBranch: null,
+        uncommittedChanges: 0,
+      };
+    }
+    try {
+      const status = await this.gitService.getStatus(record.rootPath);
+      return {
+        ...record,
+        gitBranch: status.branch,
+        uncommittedChanges: status.staged + status.unstaged + status.untracked,
+      };
+    } catch {
+      return {
+        ...record,
+        gitBranch: null,
+        uncommittedChanges: 0,
+      };
+    }
+  }
+
+  async list(): Promise<ProjectRecord[]> {
+    const rows = this.db.select().from(projects).all();
+    return Promise.all(rows.map((r) => this.enrichWithGit(r)));
   }
 
   async create(input: { name: string; rootPath: string }): Promise<ProjectRecord> {
@@ -55,6 +87,25 @@ export class ProjectService {
       throw new ProjectServiceError("项目路径不存在。", "PATH_NOT_FOUND");
     }
 
+    let realPath: string;
+    try {
+      realPath = fs.realpathSync(rootPath);
+    } catch {
+      throw new ProjectServiceError("项目路径无效。", "INVALID_PATH");
+    }
+
+    if (realPath !== rootPath) {
+      throw new ProjectServiceError("项目路径不能是符号链接。", "INVALID_PATH");
+    }
+
+    const home = os.homedir();
+    const sensitiveDirs = [".ssh", ".aws", ".gnupg", ".kube", ".config"];
+    for (const dir of sensitiveDirs) {
+      if (realPath.startsWith(path.join(home, dir))) {
+        throw new ProjectServiceError("不允许将敏感目录注册为项目。", "INVALID_PATH");
+      }
+    }
+
     const existing = this.db
       .select()
       .from(projects)
@@ -69,7 +120,7 @@ export class ProjectService {
     const now = new Date().toISOString();
     const id = uuidv7();
 
-    const record: ProjectRecord = {
+    const record = {
       id,
       name,
       rootPath,
@@ -89,7 +140,7 @@ export class ProjectService {
       updatedAt: record.updatedAt,
     });
 
-    return record;
+    return this.enrichWithGit(record as typeof projects.$inferSelect);
   }
 
   getById(projectId: string): ProjectRecord {
@@ -107,7 +158,25 @@ export class ProjectService {
       throw new ProjectServiceError("项目已被禁用。", "PROJECT_DISABLED");
     }
 
-    return project;
+    return {
+      ...project,
+      gitBranch: null,
+      uncommittedChanges: 0,
+    };
+  }
+
+  async enrichById(projectId: string): Promise<ProjectRecord> {
+    const project = this.db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .get();
+
+    if (!project) {
+      throw new ProjectServiceError("项目不存在。", "PROJECT_NOT_FOUND");
+    }
+
+    return this.enrichWithGit(project);
   }
 
   async update(
@@ -144,11 +213,7 @@ export class ProjectService {
       .set(updates)
       .where(eq(projects.id, projectId));
 
-    return this.db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, projectId))
-      .get()!;
+    return this.enrichById(projectId);
   }
 
   async delete(projectId: string): Promise<void> {

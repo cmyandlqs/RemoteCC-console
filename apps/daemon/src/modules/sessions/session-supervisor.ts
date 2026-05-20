@@ -51,7 +51,19 @@ export class SessionSupervisor {
     );
     this.workers.set(session.id, worker);
 
-    worker.start(prompt).catch(() => {});
+    worker.start(prompt).catch(async (err) => {
+      this.workers.delete(session.id);
+      await this.sessionService.update(session.id, {
+        status: "error",
+        lastError: err instanceof Error ? err.message : String(err),
+        lastActiveAt: new Date().toISOString(),
+      });
+      this.eventBus.publish(
+        "session.error",
+        { message: err instanceof Error ? err.message : String(err) },
+        { sessionId: session.id, projectId },
+      );
+    });
 
     return { sessionId: session.id };
   }

@@ -1,33 +1,9 @@
 // @ts-ignore - Vite env types
-const WS_BASE = (import.meta.env.VITE_DAEMON_WS_URL ?? "ws://localhost:8788").replace("http", "ws");
+const WS_BASE = (import.meta.env.VITE_DAEMON_WS_URL ?? "ws://localhost:8787").replace("http", "ws");
 
-export type WsEnvelope<T = unknown> = {
-  eventId: string;
-  ts: string;
-  type: WsEventType;
-  sessionId?: string;
-  projectId?: string;
-  payload: T;
-};
+export type { WsEnvelope, WsEventType, WsClientMessage } from "@agent-console/shared-types";
 
-export type WsEventType =
-  | "session.state.changed"
-  | "session.message.delta"
-  | "session.message.completed"
-  | "session.command.started"
-  | "session.command.output"
-  | "session.command.completed"
-  | "session.approval.requested"
-  | "session.approval.resolved"
-  | "session.file_change.updated"
-  | "session.usage.updated"
-  | "session.error"
-  | "session.completed";
-
-export type WsClientMessage =
-  | { type: "subscribe"; sessionId: string }
-  | { type: "unsubscribe"; sessionId: string }
-  | { type: "ping" };
+import type { WsEnvelope, WsClientMessage } from "@agent-console/shared-types";
 
 type WsHandler = (envelope: WsEnvelope) => void;
 
@@ -38,10 +14,16 @@ export class WsClient {
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectDelay = 1000;
+  private token: string | null = null;
+
+  setToken(token: string): void {
+    this.token = token;
+  }
 
   connect(url?: string): void {
     if (this.ws?.readyState === WebSocket.OPEN) return;
-    const wsUrl = url ?? `${WS_BASE}/ws`;
+    const base = url ?? `${WS_BASE}/ws`;
+    const wsUrl = this.token ? `${base}?token=${encodeURIComponent(this.token)}` : base;
     this.ws = new WebSocket(wsUrl);
     this.ws.onopen = () => {
       this.reconnectDelay = 1000;

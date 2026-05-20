@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
 
 import type { EventBus } from "../infra/event-bus.js";
+import type { AuthService } from "../modules/auth/auth-service.js";
 import type { WsEnvelope, WsClientMessage } from "@agent-console/shared-types";
 
 const PING_INTERVAL_MS = 30_000;
@@ -15,6 +16,7 @@ type ClientState = {
 export async function registerRealtimeRoutes(
   app: FastifyInstance,
   eventBus: EventBus,
+  authService: AuthService,
 ): Promise<void> {
   const clients = new Map<WebSocket, ClientState>();
 
@@ -40,7 +42,13 @@ export async function registerRealtimeRoutes(
     clients.clear();
   });
 
-  app.get("/ws", { websocket: true }, (socket) => {
+  app.get("/ws", { websocket: true }, (socket, request) => {
+    const token = new URL(request.url, "http://localhost").searchParams.get("token");
+    if (!token || !authService.validateToken(token)) {
+      socket.close(4001, "Unauthorized");
+      return;
+    }
+
     const state: ClientState = {
       socket,
       subscribedSessions: new Set(),

@@ -44,7 +44,7 @@ export class ApprovalService {
       toolName: input.toolName,
       description: input.description ?? null,
       payloadJson: input.payload ? JSON.stringify(input.payload) : null,
-      allowedActionsJson: JSON.stringify(input.allowedActions ?? ["deny", "dismiss"]),
+      allowedActionsJson: JSON.stringify(input.allowedActions ?? ["rejected", "dismissed"]),
       status: "pending",
       createdAt: now,
       resolvedAt: null,
@@ -119,6 +119,10 @@ export class ApprovalService {
       { sessionId: existing.sessionId },
     );
 
-    return this.getById(approvalId)!;
+    const updated = this.getById(approvalId);
+    if (!updated) {
+      throw new Error("审批请求不存在。");
+    }
+    return updated;
   }
 }

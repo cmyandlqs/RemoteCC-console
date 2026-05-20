@@ -39,6 +39,7 @@ export interface ClaudeAdapter {
     cwd: string,
     prompt: string,
     sessionId?: string,
+    signal?: AbortSignal,
   ): AsyncIterable<AdapterEvent>;
 
   listSessions(cwd: string): Promise<AdapterSessionInfo[]>;

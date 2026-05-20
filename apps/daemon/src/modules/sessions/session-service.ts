@@ -162,11 +162,15 @@ export class SessionService {
       .set(updates)
       .where(eq(sessions.id, sessionId));
 
-    return this.db
+    const updated = this.db
       .select()
       .from(sessions)
       .where(eq(sessions.id, sessionId))
-      .get()!;
+      .get();
+    if (!updated) {
+      throw new SessionServiceError("会话不存在。", "SESSION_NOT_FOUND");
+    }
+    return updated;
   }
 
   async delete(sessionId: string): Promise<void> {

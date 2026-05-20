@@ -57,6 +57,10 @@ function getClaudeBin(): string {
   return path.join(home, ".local", "bin", "claude");
 }
 
+function stripAnsi(line: string): string {
+  return line.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+}
+
 function parseCliEvent(raw: CliEvent): AdapterEvent[] {
   const events: AdapterEvent[] = [];
 
@@ -143,12 +147,15 @@ export class CliClaudeAdapter implements ClaudeAdapter {
     cwd: string,
     prompt: string,
     sessionId?: string,
+    signal?: AbortSignal,
   ): AsyncIterable<AdapterEvent> {
     const args = [
       "-p",
       "--output-format",
       "stream-json",
       "--verbose",
+      "--permission-mode",
+      "dontAsk",
     ];
 
     if (sessionId) {
@@ -174,10 +181,21 @@ export class CliClaudeAdapter implements ClaudeAdapter {
     let resolveNext: (() => void) | null = null;
     let done = false;
 
+    const cleanup = () => {
+      if (!child.killed) {
+        child.kill("SIGTERM");
+      }
+    };
+
+    if (signal) {
+      signal.addEventListener("abort", cleanup, { once: true });
+    }
+
     rl.on("line", (line: string) => {
-      if (!line.trim()) return;
+      const clean = stripAnsi(line);
+      if (!clean.trim()) return;
       try {
-        const raw = JSON.parse(line) as CliEvent;
+        const raw = JSON.parse(clean) as CliEvent;
         const parsed = parseCliEvent(raw);
         for (const event of parsed) {
           eventQueue.push(event);
@@ -187,7 +205,9 @@ export class CliClaudeAdapter implements ClaudeAdapter {
           }
         }
       } catch {
-        // ignore unparseable lines
+        if (clean.trim() && !clean.startsWith("{")) {
+          console.warn("[CliClaudeAdapter] unparseable line:", clean.substring(0, 200));
+        }
       }
     });
 
@@ -208,22 +228,29 @@ export class CliClaudeAdapter implements ClaudeAdapter {
       }
     });
 
-    while (true) {
-      if (eventQueue.length > 0) {
-        yield eventQueue.shift()!;
-        continue;
-      }
-      if (done) break;
+    try {
+      while (true) {
+        if (eventQueue.length > 0) {
+          yield eventQueue.shift()!;
+          continue;
+        }
+        if (done) break;
 
-      yield new Promise<AdapterEvent>((resolve) => {
-        resolveNext = () => {
-          if (eventQueue.length > 0) {
-            resolve(eventQueue.shift()!);
-          } else if (done) {
-            resolve({ type: "error", message: "Process ended unexpectedly" });
-          }
-        };
-      });
+        yield new Promise<AdapterEvent>((resolve) => {
+          resolveNext = () => {
+            if (eventQueue.length > 0) {
+              resolve(eventQueue.shift()!);
+            } else if (done) {
+              resolve({ type: "error", message: "Process ended unexpectedly" });
+            }
+          };
+        });
+      }
+    } finally {
+      cleanup();
+      if (signal) {
+        signal.removeEventListener("abort", cleanup);
+      }
     }
 
     if (stderrChunks.length > 0) {

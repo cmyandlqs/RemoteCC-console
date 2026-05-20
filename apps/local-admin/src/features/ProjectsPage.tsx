@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../lib/api";
 
@@ -76,14 +77,19 @@ export function ProjectsPage() {
                 · 未提交：{project.uncommittedChanges} 个文件
               </p>
             </div>
-            <button
-              type="button"
-              className="btn-danger"
-              onClick={() => deletePrj.mutate(project.id)}
-              disabled={deletePrj.isPending}
-            >
-              删除
-            </button>
+            <div className="actions">
+              <Link to={`/projects/${project.id}/sessions`}>
+                查看会话
+              </Link>
+              <button
+                type="button"
+                className="btn-danger"
+                onClick={() => deletePrj.mutate(project.id)}
+                disabled={deletePrj.isPending}
+              >
+                删除
+              </button>
+            </div>
           </div>
         ))}
       </div>

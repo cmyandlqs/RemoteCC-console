@@ -1,69 +1,34 @@
+import type {
+  HostSummary,
+  Project,
+  Session,
+  ApprovalRecord,
+} from "@agent-console/shared-types";
+
+export type { HostSummary, Project, Session, ApprovalRecord };
+
 // @ts-ignore - Vite env types
 const BASE = import.meta.env.VITE_DAEMON_URL ?? "http://localhost:8787";
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
+  const headers: Record<string, string> = {};
+  if (init?.body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+  const fetchInit: RequestInit = { ...init };
+  if (Object.keys(headers).length > 0) {
+    fetchInit.headers = headers;
+  }
+  const res = await fetch(`${BASE}${path}`, fetchInit as RequestInit);
+  if (res.status === 204) return undefined as T;
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error((body as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
   }
-  if (res.status === 204) return undefined as T;
   return res.json() as T;
 }
 
 export type ApiResponse<T> = { data: T } | { error: { code: string; message: string } };
-
-export type HostSummary = {
-  name: string;
-  os: string;
-  daemonVersion: string;
-  status: "online";
-  activeSessionCount: number;
-  claudeAuthState: "available" | "unavailable" | "error";
-  tailscaleState: "online" | "offline" | "not_installed";
-};
-
-export type Project = {
-  id: string;
-  name: string;
-  rootPath: string;
-  gitBranch: string | null;
-  uncommittedChanges: number;
-  isEnabled: boolean;
-  createdAt: string;
-  lastActiveAt: string | null;
-};
-
-export type Session = {
-  id: string;
-  projectId: string;
-  name: string | null;
-  status: "idle" | "running" | "waiting_approval" | "error" | "completed" | "stopped" | "disconnected";
-  model: string | null;
-  inputTokens: number | null;
-  outputTokens: number | null;
-  totalCostUsd: string | null;
-  contextWindow: number | null;
-  startedAt: string | null;
-  lastActiveAt: string | null;
-  lastError: string | null;
-};
-
-export type ApprovalRecord = {
-  id: string;
-  sessionId: string;
-  toolUseId: string | null;
-  toolName: string;
-  description: string | null;
-  payloadJson: string | null;
-  allowedActionsJson: string;
-  status: "pending" | "approved" | "rejected" | "dismissed";
-  createdAt: string;
-  resolvedAt: string | null;
-};
 
 export const apiClient = {
   getHostInfo: () => api<{ data: HostSummary }>("/api/host/info"),

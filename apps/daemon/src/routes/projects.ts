@@ -20,7 +20,7 @@ export async function registerProjectRoutes(
   projectService: ProjectService,
 ): Promise<void> {
   app.get("/api/projects", async () => {
-    return { data: projectService.list() };
+    return { data: await projectService.list() };
   });
 
   app.get<{ Params: { projectId: string } }>(

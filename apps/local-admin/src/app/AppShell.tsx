@@ -8,6 +8,7 @@ export function AppShell() {
         <nav className="nav">
           <Link to="/">概览</Link>
           <Link to="/projects">项目</Link>
+          <Link to="/approvals">审批</Link>
           <Link to="/pairing">配对</Link>
         </nav>
       </aside>

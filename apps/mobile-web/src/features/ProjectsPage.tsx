@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../lib/api";
+import { apiClient } from "../lib/api.js";
 
 export function ProjectsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -23,10 +23,10 @@ export function ProjectsPage() {
 
   const createSession = useMutation({
     mutationFn: (prompt: string) => apiClient.createSession(projectId!, prompt),
-    onSuccess: (result) => {
+    onSuccess: (result, prompt) => {
       qc.invalidateQueries({ queryKey: ["sessions", projectId] });
       setPromptInput("");
-      navigate(`/sessions/${result.data.sessionId}`);
+      navigate(`/sessions/${result.data.sessionId}`, { state: { prompt } });
     },
   });
 

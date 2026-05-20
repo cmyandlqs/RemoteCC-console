@@ -11,12 +11,33 @@ import type {
   ClaudeAdapter,
 } from "./types.js";
 
+type ContentBlockDelta =
+  | { type: "text_delta"; text: string }
+  | { type: "thinking_delta"; thinking: string }
+  | { type: "signature_delta"; signature: string }
+  | { type: "input_json_delta"; partial_json: string };
+
+type StreamEvent = {
+  type: "message_start" | "message_stop" | "message_delta" | "content_block_start" | "content_block_stop" | "content_block_delta";
+  index?: number;
+  delta?: ContentBlockDelta;
+  content_block?: {
+    type: string;
+    text?: string;
+    thinking?: string;
+    id?: string;
+    name?: string;
+    input?: unknown;
+  };
+};
+
 type CliEvent = {
   type: string;
   subtype?: string;
   session_id?: string;
   cwd?: string;
   model?: string;
+  event?: StreamEvent;
   message?: {
     content?: Array<{
       type: string;
@@ -74,14 +95,20 @@ function parseCliEvent(raw: CliEvent): AdapterEvent[] {
     return events;
   }
 
+  if (raw.type === "stream_event" && raw.event) {
+    const se = raw.event;
+    if (se.type === "content_block_delta" && se.delta) {
+      if (se.delta.type === "text_delta") {
+        events.push({ type: "text_delta", text: se.delta.text });
+      } else if (se.delta.type === "thinking_delta") {
+        events.push({ type: "thinking_delta", text: se.delta.thinking });
+      }
+    }
+    return events;
+  }
+
   if (raw.type === "assistant" && raw.message?.content) {
     for (const block of raw.message.content) {
-      if (block.type === "text" && block.text) {
-        events.push({ type: "text_delta", text: block.text });
-      }
-      if (block.type === "thinking" && block.thinking) {
-        events.push({ type: "thinking_delta", text: block.thinking });
-      }
       if (block.type === "tool_use" && block.id && block.name) {
         events.push({
           type: "tool_use",
@@ -153,6 +180,7 @@ export class CliClaudeAdapter implements ClaudeAdapter {
       "-p",
       "--output-format",
       "stream-json",
+      "--include-partial-messages",
       "--verbose",
       "--permission-mode",
       "dontAsk",
@@ -299,15 +327,11 @@ export class CliClaudeAdapter implements ClaudeAdapter {
     _sessionId: string,
     _name: string,
   ): Promise<void> {
-    // Session rename is handled via CLI --name flag at creation time
-    // or by editing the session file header. For now, no-op.
   }
 
   async getSessionMessages(
-    sessionId: string,
+    _sessionId: string,
   ): Promise<AdapterMessage[]> {
-    // This is a simplified implementation that reads from session file
-    // A more complete version would parse the JSONL format
     return [];
   }
 

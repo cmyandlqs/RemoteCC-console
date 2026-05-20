@@ -1,8 +1,8 @@
-import { eq } from "drizzle-orm";
+import { eq, and, gt } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 
 import type { AppDatabase } from "../../infra/database.js";
-import { sessions } from "../../infra/schema.js";
+import { sessions, sessionMessages } from "../../infra/schema.js";
 
 export type SessionStatus =
   | "idle"
@@ -206,4 +206,53 @@ export class SessionService {
 
     return running.length;
   }
+
+  async saveMessage(input: {
+    sessionId: string;
+    role: "user" | "assistant";
+    kind: "text" | "thinking" | "user";
+    content: string;
+  }): Promise<void> {
+    const now = new Date().toISOString();
+    const id = uuidv7();
+
+    const maxSeq = this.db
+      .select({ seq: sessionMessages.seq })
+      .from(sessionMessages)
+      .where(eq(sessionMessages.sessionId, input.sessionId))
+      .all();
+    const nextSeq = maxSeq.length === 0 ? 0 : Math.max(...maxSeq.map((r) => r.seq)) + 1;
+
+    await this.db.insert(sessionMessages).values({
+      id,
+      sessionId: input.sessionId,
+      role: input.role,
+      kind: input.kind,
+      content: input.content,
+      seq: nextSeq,
+      createdAt: now,
+    });
+  }
+
+  getMessages(sessionId: string, afterSeq?: number): SessionMessageRecord[] {
+    const conditions = afterSeq !== undefined
+      ? and(eq(sessionMessages.sessionId, sessionId), gt(sessionMessages.seq, afterSeq))
+      : eq(sessionMessages.sessionId, sessionId);
+
+    return this.db
+      .select()
+      .from(sessionMessages)
+      .where(conditions)
+      .all();
+  }
 }
+
+export type SessionMessageRecord = {
+  id: string;
+  sessionId: string;
+  role: "user" | "assistant";
+  kind: "text" | "thinking" | "user";
+  content: string;
+  seq: number;
+  createdAt: string;
+};

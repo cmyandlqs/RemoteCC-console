@@ -12,45 +12,53 @@ export class WsClient {
   private handlers: Set<WsHandler> = new Set();
   private sessionSubscriptions: Set<string> = new Set();
   private pingTimer: ReturnType<typeof setInterval> | null = null;
-  private reconnectTimer: ReturnType<typeof setInterval> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = 1000;
-  private token: string | null = null;
-
-  setToken(token: string): void {
-    this.token = token;
-  }
+  private connecting = false;
 
   connect(url?: string): void {
-    if (this.ws?.readyState === WebSocket.OPEN) return;
+    const state = this.ws?.readyState;
+    if (state === WebSocket.OPEN || state === WebSocket.CONNECTING || this.connecting) return;
+    this.connecting = true;
+
     const base = url ?? `${WS_BASE}/ws`;
-    const wsUrl = this.token ? `${base}?token=${encodeURIComponent(this.token)}` : base;
-    this.ws = new WebSocket(wsUrl);
+    this.ws = new WebSocket(base);
+
     this.ws.onopen = () => {
+      this.connecting = false;
       this.reconnectDelay = 1000;
       for (const sid of this.sessionSubscriptions) {
         this.send({ type: "subscribe", sessionId: sid });
       }
       this.startPing();
     };
+
     this.ws.onmessage = (ev) => {
       try {
         const envelope: WsEnvelope = JSON.parse(ev.data as string);
         this.handlers.forEach((h) => h(envelope));
       } catch {
-        // ignore unparseable
+        // ignore
       }
     };
+
     this.ws.onclose = () => {
+      this.connecting = false;
       this.stopPing();
       this.scheduleReconnect(url);
     };
+
     this.ws.onerror = () => {
+      this.connecting = false;
       this.ws?.close();
     };
   }
 
   disconnect(): void {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.stopPing();
     this.ws?.close();
     this.ws = null;
@@ -58,7 +66,9 @@ export class WsClient {
 
   subscribe(handler: WsHandler): () => void {
     this.handlers.add(handler);
-    return () => this.handlers.delete(handler);
+    return () => {
+      this.handlers.delete(handler);
+    };
   }
 
   subscribeSession(sessionId: string): void {
@@ -93,7 +103,9 @@ export class WsClient {
   }
 
   private scheduleReconnect(url?: string): void {
+    if (this.reconnectTimer) return;
     this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       this.connect(url);
     }, this.reconnectDelay);
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30_000);

@@ -29,6 +29,13 @@ export class SessionWorker {
       { sessionId: this.sessionId, projectId: this.projectId },
     );
 
+    this.sessionService.saveMessage({
+      sessionId: this.sessionId,
+      role: "user",
+      kind: "user",
+      content: prompt,
+    }).catch(() => {});
+
     this.abortController = new AbortController();
 
     try {
@@ -62,6 +69,13 @@ export class SessionWorker {
       { status: "running" },
       { sessionId: this.sessionId, projectId: this.projectId },
     );
+
+    this.sessionService.saveMessage({
+      sessionId: this.sessionId,
+      role: "user",
+      kind: "user",
+      content: prompt,
+    }).catch(() => {});
 
     this.abortController = new AbortController();
 
@@ -105,6 +119,12 @@ export class SessionWorker {
         break;
 
       case "text_delta":
+        this.sessionService.saveMessage({
+          sessionId: this.sessionId,
+          role: "assistant",
+          kind: "text",
+          content: event.text,
+        }).catch(() => {});
         this.eventBus.publish(
           "session.message.delta",
           { text: event.text },
@@ -113,6 +133,12 @@ export class SessionWorker {
         break;
 
       case "thinking_delta":
+        this.sessionService.saveMessage({
+          sessionId: this.sessionId,
+          role: "assistant",
+          kind: "thinking",
+          content: event.text,
+        }).catch(() => {});
         this.eventBus.publish(
           "session.message.delta",
           { text: event.text, kind: "thinking" },

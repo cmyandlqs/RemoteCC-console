@@ -86,7 +86,7 @@ export async function buildServer() {
   await registerSessionRoutes(app, projectService, sessionService, supervisor);
   await registerApprovalRoutes(app, approvalService);
   await registerGitRoutes(app, projectService, gitService, fileChangeService);
-  await registerRealtimeRoutes(app, eventBus, authService);
+  await registerRealtimeRoutes(app, eventBus, authService, sessionService);
 
   app.addHook("onClose", async () => {
     app.log.info("Closing database connection");

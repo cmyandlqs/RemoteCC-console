@@ -71,6 +71,16 @@ CREATE TABLE IF NOT EXISTS device_bindings (
   last_used_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS session_messages (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES sessions(id),
+  role TEXT NOT NULL CHECK(role IN ('user','assistant')),
+  kind TEXT NOT NULL CHECK(kind IN ('text','thinking','user')),
+  content TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events(session_id);
@@ -79,6 +89,8 @@ CREATE INDEX IF NOT EXISTS idx_approval_requests_status ON approval_requests(sta
 CREATE INDEX IF NOT EXISTS idx_file_changes_session_id ON file_changes(session_id);
 CREATE INDEX IF NOT EXISTS idx_file_changes_project_id ON file_changes(project_id);
 CREATE INDEX IF NOT EXISTS idx_device_bindings_status ON device_bindings(status);
+CREATE INDEX IF NOT EXISTS idx_session_messages_session_id ON session_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_session_messages_session_seq ON session_messages(session_id, seq);
 `;
 
 export function runMigrations(db: Database.Database): void {

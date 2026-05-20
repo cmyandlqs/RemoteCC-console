@@ -21,25 +21,30 @@ export type ApprovalItem = {
 export type OutputChunk = {
   eventId: string;
   text: string;
-  kind?: "thinking" | "text";
+  kind?: "thinking" | "text" | "user";
   timestamp: string;
 };
 
+type SessionData = {
+  status: SessionStatus;
+  chunks: OutputChunk[];
+  approvals: ApprovalItem[];
+};
+
 export type SessionStore = {
-  activeSessionId: string | null;
-  sessionStatus: SessionStatus;
-  outputChunks: OutputChunk[];
-  pendingApprovals: ApprovalItem[];
+  sessions: Record<string, SessionData>;
   currentModel: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
   totalCostUsd: string | null;
   contextWindow: number | null;
 
-  setActiveSession: (id: string | null) => void;
-  setSessionStatus: (status: SessionStatus) => void;
-  appendOutput: (chunk: OutputChunk) => void;
-  clearOutput: () => void;
+  getChunks: (sessionId: string) => OutputChunk[];
+  getStatus: (sessionId: string) => SessionStatus;
+  getApprovals: (sessionId: string) => ApprovalItem[];
+  appendChunk: (sessionId: string, chunk: OutputChunk) => void;
+  setSessionStatus: (sessionId: string, status: SessionStatus) => void;
+  clearSession: (sessionId: string) => void;
   addApproval: (item: ApprovalItem) => void;
   removeApproval: (approvalId: string) => void;
   updateUsage: (data: {
@@ -52,11 +57,7 @@ export type SessionStore = {
   reset: () => void;
 };
 
-const initialState = {
-  activeSessionId: null,
-  sessionStatus: "idle" as SessionStatus,
-  outputChunks: [] as OutputChunk[],
-  pendingApprovals: [] as ApprovalItem[],
+const initialShared = {
   currentModel: null as string | null,
   inputTokens: null as number | null,
   outputTokens: null as number | null,
@@ -64,27 +65,88 @@ const initialState = {
   contextWindow: null as number | null,
 };
 
-export const useSessionStore = create<SessionStore>((set) => ({
-  ...initialState,
+function ensureSession(sessions: Record<string, SessionData>, sessionId: string): Record<string, SessionData> {
+  if (sessions[sessionId]) return sessions;
+  return {
+    ...sessions,
+    [sessionId]: { status: "idle", chunks: [], approvals: [] },
+  };
+}
 
-  setActiveSession: (id) => set({ activeSessionId: id }),
-  setSessionStatus: (status) => set({ sessionStatus: status }),
+export const useSessionStore = create<SessionStore>((set, get) => ({
+  sessions: {},
+  ...initialShared,
 
-  appendOutput: (chunk) =>
-    set((s) => ({ outputChunks: [...s.outputChunks, chunk] })),
+  getChunks: (sessionId) => get().sessions[sessionId]?.chunks ?? [],
+  getStatus: (sessionId) => get().sessions[sessionId]?.status ?? "idle",
+  getApprovals: (sessionId) => get().sessions[sessionId]?.approvals ?? [],
 
-  clearOutput: () => set({ outputChunks: [] }),
+  appendChunk: (sessionId, chunk) =>
+    set((s) => {
+      const updated = ensureSession(s.sessions, sessionId);
+      const prev = updated[sessionId]!;
+      return {
+        sessions: {
+          ...updated,
+          [sessionId]: {
+            ...prev,
+            chunks: [...prev.chunks, chunk],
+          },
+        },
+      };
+    }),
+
+  setSessionStatus: (sessionId, status) =>
+    set((s) => {
+      const updated = ensureSession(s.sessions, sessionId);
+      const prev = updated[sessionId]!;
+      return {
+        sessions: {
+          ...updated,
+          [sessionId]: { ...prev, status },
+        },
+      };
+    }),
+
+  clearSession: (sessionId) =>
+    set((s) => {
+      const updated = ensureSession(s.sessions, sessionId);
+      return {
+        sessions: {
+          ...updated,
+          [sessionId]: { status: "idle", chunks: [], approvals: [] },
+        },
+      };
+    }),
 
   addApproval: (item) =>
-    set((s) => ({
-      pendingApprovals: [...s.pendingApprovals, item],
-      sessionStatus: "waiting_approval",
-    })),
+    set((s) => {
+      const sid = item.sessionId;
+      const updated = ensureSession(s.sessions, sid);
+      const prev = updated[sid]!;
+      return {
+        sessions: {
+          ...updated,
+          [sid]: {
+            ...prev,
+            approvals: [...prev.approvals, item],
+            status: "waiting_approval",
+          },
+        },
+      };
+    }),
 
   removeApproval: (approvalId) =>
-    set((s) => ({
-      pendingApprovals: s.pendingApprovals.filter((a) => a.approvalId !== approvalId),
-    })),
+    set((s) => {
+      const newSessions = { ...s.sessions };
+      for (const [sid, data] of Object.entries(newSessions)) {
+        const filtered = data.approvals.filter((a) => a.approvalId !== approvalId);
+        if (filtered.length !== data.approvals.length) {
+          newSessions[sid] = { ...data, approvals: filtered };
+        }
+      }
+      return { sessions: newSessions };
+    }),
 
   updateUsage: (data) =>
     set((s) => ({
@@ -95,5 +157,5 @@ export const useSessionStore = create<SessionStore>((set) => ({
       contextWindow: data.contextWindow ?? s.contextWindow,
     })),
 
-  reset: () => set(initialState),
+  reset: () => set({ sessions: {}, ...initialShared }),
 }));

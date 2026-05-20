@@ -91,6 +91,18 @@ export const fileChanges = sqliteTable("file_changes", {
   createdAt: text("created_at").notNull(),
 });
 
+export const sessionMessages = sqliteTable("session_messages", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id")
+    .notNull()
+    .references(() => sessions.id),
+  role: text("role", { enum: ["user", "assistant"] }).notNull(),
+  kind: text("kind", { enum: ["text", "thinking", "user"] }).notNull(),
+  content: text("content").notNull(),
+  seq: integer("seq").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
 export const deviceBindings = sqliteTable("device_bindings", {
   id: text("id").primaryKey(),
   deviceName: text("device_name"),

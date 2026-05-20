@@ -6,22 +6,14 @@ export function AppShell() {
 
   return (
     <div className="mobile-app">
-      {isSessionPage ? (
-        <Outlet />
-      ) : (
+      {!isSessionPage && (
         <nav className="bottom-nav">
           <Link to="/" className={location.pathname === "/" ? "active" : ""}>
             主机
           </Link>
-          <Link
-            to="/projects"
-            className={location.pathname.startsWith("/projects") ? "active" : ""}
-          >
-            项目
-          </Link>
         </nav>
       )}
-      <div className={isSessionPage ? "" : "page-content"}>
+      <div className={!isSessionPage ? "page-content" : ""}>
         <Outlet />
       </div>
     </div>

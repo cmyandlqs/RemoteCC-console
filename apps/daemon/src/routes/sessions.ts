@@ -49,6 +49,26 @@ export async function registerSessionRoutes(
     },
   );
 
+  app.get<{ Params: { sessionId: string }; Querystring: { after_seq?: string } }>(
+    "/api/sessions/:sessionId/messages",
+    async (request, reply) => {
+      try {
+        sessionService.getById(request.params.sessionId);
+        const afterSeq = request.query.after_seq
+          ? Number(request.query.after_seq)
+          : undefined;
+        const messages = sessionService.getMessages(request.params.sessionId, afterSeq);
+        return { data: messages };
+      } catch (error) {
+        if (error instanceof SessionServiceError) {
+          reply.code(404);
+          return { error: { code: error.code, message: error.message } };
+        }
+        throw error;
+      }
+    },
+  );
+
   app.get<{ Params: { projectId: string } }>(
     "/api/projects/:projectId/sessions",
     async (request, reply) => {

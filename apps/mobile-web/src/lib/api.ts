@@ -44,6 +44,10 @@ export const apiClient = {
     api<{ data: Session[] }>(`/api/projects/${projectId}/sessions`),
   getSession: (sessionId: string) =>
     api<{ data: Session }>(`/api/sessions/${sessionId}`),
+  getMessages: (sessionId: string, afterSeq?: number) =>
+    api<{ data: Array<{ id: string; sessionId: string; role: string; kind: string; content: string; seq: number; createdAt: string }> }>(
+      `/api/sessions/${sessionId}/messages${afterSeq !== undefined ? `?after_seq=${afterSeq}` : ""}`,
+    ),
   sendMessage: (sessionId: string, text: string) =>
     api<{ data: { ok: boolean } }>(`/api/sessions/${sessionId}/message`, {
       method: "POST",
@@ -52,6 +56,11 @@ export const apiClient = {
   stopSession: (sessionId: string) =>
     api<{ data: { ok: boolean } }>(`/api/sessions/${sessionId}/stop`, {
       method: "POST",
+    }),
+  renameSession: (sessionId: string, name: string) =>
+    api<{ data: Session }>(`/api/sessions/${sessionId}/rename`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
     }),
 
   listPendingApprovals: () => api<{ data: ApprovalRecord[] }>("/api/approvals/pending"),

@@ -1,0 +1,138 @@
+:root {
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #231f1a;
+  background: #f5f0e7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f5f0e7;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  border: 1px solid #d8ccb6;
+  background: #fffaf1;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+input {
+  border: 1px solid #ded2bf;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fffdf9;
+}
+
+.mobile-app {
+  min-height: 100vh;
+  padding: 16px;
+}
+
+.mobile-panel,
+.session-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.section-header,
+.session-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.section-header h2,
+.session-header h2 {
+  margin: 0 0 6px;
+}
+
+.section-header p,
+.session-header p {
+  margin: 0;
+  color: #6f685d;
+}
+
+.status-dot {
+  white-space: nowrap;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #ebf4e9;
+  color: #2f6b35;
+  border: 1px solid #cfe2cd;
+}
+
+.stack {
+  display: grid;
+  gap: 12px;
+}
+
+.list-card,
+.bubble,
+.approval-card,
+.metric-strip {
+  border: 1px solid #e4d9ca;
+  border-radius: 8px;
+  background: #fffaf4;
+}
+
+.list-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+}
+
+.list-card span {
+  color: #6f685d;
+}
+
+.metric-strip {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.timeline {
+  display: grid;
+  gap: 12px;
+}
+
+.bubble,
+.approval-card {
+  padding: 16px;
+}
+
+.bubble p,
+.approval-card p {
+  margin-bottom: 0;
+  color: #4d473f;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.composer {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding-top: 8px;
+}

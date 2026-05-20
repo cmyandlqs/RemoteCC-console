@@ -52,12 +52,8 @@ Agent Console Mobile 是一个面向 AI Coding 重度用户的移动端远程控
 
 当前还没有完成的部分：
 
-- Claude SDK 真实接入
-- SQLite 持久化接入
-- REST API 细化与真实数据联通
-- WebSocket 事件流真实接入
-- 审批拒绝闭环联调
 - 真实 Linux 主机部署验证
+- 前端对 daemon API 的接入（进行中）
 
 ## 当前 MVP 功能口径
 
@@ -71,9 +67,8 @@ Agent Console Mobile 是一个面向 AI Coding 重度用户的移动端远程控
 6. 查看流式输出、工具调用结果、错误信息
 7. 查看模型、Token、Cost、Context Window
 8. 查看 Git 状态和会话触达文件提示
-9. 接收审批卡片
-10. 拒绝审批请求
-11. 看到“需要回到主机继续处理”的挂起提示
+9. 接收审批卡片（感知风险）并停止 session
+10. 看到"需要回到主机继续处理"的挂起提示
 
 当前明确不纳入第一版承诺的能力包括：
 
@@ -284,6 +279,16 @@ doc/
 | `POST /api/pairing/create` | 生成配对 token（仅本机） |
 | `POST /api/pairing/confirm` | 手机端确认绑定 |
 | `GET /ws` | WebSocket 事件流 |
+
+### 安全模型
+
+Daemon 使用 `claude -p` 模式（无 stdin 交互），移动端对正在运行的 Claude **无法注入指令或审批响应**。防护通过三层机制实现：
+
+1. **`--permission-mode dontAsk`**：启动时指定，自动拒绝所有需审批的命令，只允许白名单工具
+2. **`settings.json` permissions 规则**：在 `~/.claude/settings.json` 中配置 `allow`/`deny` 工具规则
+3. **PreToolUse Hook**：自定义脚本在工具执行前拦截 `rm -rf /` 等极端危险命令（Hook 的 deny 在任何 permission-mode 下均有效）
+
+**移动端审批 UX = 风险感知 + 紧急停止**：用户通过 WS 事件感知当前审批内容，可点击停止 session（Ctrl+C 效果），但无法批准让 Claude 继续执行。详见 `doc/backend-dev.md` §11.3。
 
 ### 开发命令
 

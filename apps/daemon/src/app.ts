@@ -78,13 +78,6 @@ export async function buildServer() {
       request.url.startsWith("/api/approvals")
     ) {
       requireAuth(request, reply, done);
-    } else if (
-      request.url.startsWith("/api/projects") &&
-      request.url.includes("/git-status") ||
-      request.url.includes("/diff") ||
-      request.url.includes("/file-changes")
-    ) {
-      requireAuth(request, reply, done);
     } else {
       done();
     }

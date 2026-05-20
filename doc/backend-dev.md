@@ -353,14 +353,113 @@ apps/daemon/src/
 
 第一版默认只通过 Tailscale 访问，不暴露公网匿名入口。
 
-### 11.3 审批策略
+### 11.3 Claude Code 权限模式与安全机制
 
-第一版不替代 Claude 原生审批语义，只做：
+Daemon 使用 `claude -p` 模式启动，该模式**不支持 stdin 管道输入**来响应审批/提示。因此移动端对正在运行中的 Claude 会话**无法注入任何指令或审批响应**。
 
-1. 捕获
-2. 展示
-3. 拒绝回传
-4. 挂起提示
+#### 11.3.1 三层安全模型
+
+为防止危险命令危害 Linux 系统，采用三层防护：
+
+**第一层：`--permission-mode dontAsk`**
+
+在启动 `claude -p` 时指定：
+```bash
+claude -p --permission-mode dontAsk "任务"
+```
+
+- 自动拒绝所有需要审批的工具调用
+- 只允许读取操作和已在 `settings.json` 的 `permissions.allow` 列表中明确声明的工具
+- 写操作到受保护路径（`.git`、`.bashrc`、`.bash_profile` 等）即使在 `bypassPermissions` 模式下也会被拒绝
+
+**第二层：`settings.json` permissions 白名单**
+
+在 `~/.claude/settings.json` 中配置允许/禁止的工具规则：
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(git commit *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git add *)",
+      "Edit(*)",
+      "Read(*)"
+    ],
+    "deny": [
+      "Bash(git push *)",
+      "Bash(rm -rf /)",
+      "Bash(dd if=*)",
+      "Bash(mkfs *)",
+      "Bash(mount *--bind)"
+    ]
+  }
+}
+```
+
+**第三层：PreToolUse Hook 拦截极端危险命令**
+
+Claude Code 支持 Hook 机制，在任何工具执行前可拦截阻断。在 `settings.json` 中配置：
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/block-dangerous.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Hook 脚本示例（`$CLAUDE_PROJECT_DIR/.claude/hooks/block-dangerous.sh`）：
+
+```bash
+#!/bin/bash
+INPUT=$(cat)
+COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+
+if echo "$COMMAND" | grep -qE "(rm -rf /|dd if=|mkfs|sudo su|:(){:|:&};:)"; then
+  echo "Blocked: dangerous command detected" >&2
+  exit 2  # exit 2 = 阻断工具执行
+fi
+
+exit 0  # 允许
+```
+
+**重要特性：**
+- PreToolUse Hook 在 permission-mode 检查**之前**执行
+- Hook 的 `deny`（exit 2）结果即使在 `bypassPermissions` 模式下也会被尊重
+- Hook 可以收紧权限，但无法放松权限
+
+#### 11.3.2 移动端审批 UX
+
+在当前技术约束下，移动端对审批的交互能力为：
+
+| 操作 | 支持 | 说明 |
+|---|---|---|
+| 看到 Claude 在等什么审批 | ✅ | WS 事件 `session.approval.requested` 通知 |
+| 批准让它继续 | ❌ | `claude -p` 不支持 stdin 注入 |
+| 拒绝让它继续 | ❌ | `claude -p` 不支持 stdin 注入 |
+| 停止 session（Ctrl+C 效果） | ✅ | 调用 `stop()` → `AbortController.abort()` |
+
+**移动端审批卡片 = 风险告知 + 紧急停止按钮**。用户判断风险后可立即停止 session，避免继续消耗 token 或造成更多破坏。
+
+#### 11.3.3 建议的安全配置
+
+Daemon 启动时使用 `--permission-mode dontAsk`，并建议用户在 `settings.json` 中配置白名单规则和 PreToolUse Hook，以实现：
+- 安全操作（npm/git/编辑）正常执行
+- 危险命令在三层机制中被自动拦截或拒绝
+- 移动端可实时感知审批事件并在必要时停止 session
 
 ## 12. 日志与可观测性
 

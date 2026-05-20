@@ -94,3 +94,165 @@ button {
   background: #fbf6ee;
   font-weight: 600;
 }
+
+.loading-hint {
+  color: #70685d;
+  font-size: 14px;
+}
+
+.error-hint {
+  color: #c0392b;
+  font-size: 14px;
+}
+
+.empty-hint {
+  color: #70685d;
+  font-size: 14px;
+  text-align: center;
+  padding: 16px;
+}
+
+.form-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.form-row input {
+  flex: 1;
+  min-width: 160px;
+  border: 1px solid #ded2bf;
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: #fffdf9;
+  font: inherit;
+}
+
+.btn-danger {
+  border-color: #e8a09a;
+  background: #fff0ed;
+  color: #a94442;
+}
+
+.btn-danger:hover {
+  background: #ffeaea;
+}
+
+.btn-generate {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.btn-small-danger {
+  padding: 4px 10px;
+  font-size: 13px;
+  border-color: #e8a09a;
+  background: #fff0ed;
+  color: #a94442;
+}
+
+.project-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.project-path {
+  margin: 4px 0;
+  font-size: 13px;
+  color: #70685d;
+  word-break: break-all;
+}
+
+.project-meta {
+  margin: 4px 0;
+  font-size: 12px;
+  color: #9b8f80;
+}
+
+.qr-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pairing-token code {
+  display: block;
+  margin-top: 8px;
+  padding: 12px;
+  background: #f0e8d8;
+  border-radius: 6px;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.pairing-token p {
+  margin: 0;
+  color: #70685d;
+  font-size: 14px;
+}
+
+.device-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.device-list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.device-meta {
+  color: #70685d;
+  font-size: 12px;
+}
+
+.metric-card--success {
+  border-color: #c2d9b8;
+  background: #f4faf1;
+}
+
+.metric-card--success .metric-label {
+  color: #4a7c3f;
+}
+
+.metric-card--success strong {
+  color: #2d5c27;
+}
+
+.metric-card--warning {
+  border-color: #e0c98a;
+  background: #fdf8ec;
+}
+
+.metric-card--warning .metric-label {
+  color: #7a6020;
+}
+
+.metric-card--warning strong {
+  color: #5c4718;
+}
+
+.metric-card--error {
+  border-color: #d4a5a5;
+  background: #fdf0ee;
+}
+
+.metric-card--error .metric-label {
+  color: #8b3232;
+}
+
+.metric-card--error strong {
+  color: #6b2222;
+}
+
+.access-url[data-url]::after {
+  content: attr(data-url);
+}

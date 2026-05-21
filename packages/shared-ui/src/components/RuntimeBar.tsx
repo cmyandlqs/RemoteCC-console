@@ -12,81 +12,71 @@ type Props = {
   className?: string;
 };
 
-const stateLabels: Record<RuntimeState, string> = {
-  idle: "空闲",
-  running: "运行中",
-  waiting_approval: "待审批",
-  error: "错误",
-  completed: "已完成",
-  stopped: "已停止",
+const stateConfig: Record<RuntimeState, { label: string; dotColor: string; textColor: string }> = {
+  idle: { label: "空闲", dotColor: "bg-[var(--color-status-idle)]", textColor: "text-[var(--color-text-tertiary)]" },
+  running: { label: "运行中", dotColor: "bg-[var(--color-accent)]", textColor: "text-[var(--color-accent)]" },
+  waiting_approval: { label: "待审批", dotColor: "bg-[var(--color-status-warning)]", textColor: "text-[var(--color-status-warning)]" },
+  error: { label: "错误", dotColor: "bg-[var(--color-status-error)]", textColor: "text-[var(--color-status-error)]" },
+  completed: { label: "完成", dotColor: "bg-[var(--color-status-online)]", textColor: "text-[var(--color-status-online)]" },
+  stopped: { label: "停止", dotColor: "bg-[var(--color-text-muted)]", textColor: "text-[var(--color-text-muted)]" },
 };
+
+function formatTokenCount(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
 
 export function RuntimeBar({
   model,
   inputTokens,
   outputTokens,
   costUsd,
-  contextWindow,
   state = "idle",
   className = "",
 }: Props) {
   const totalTokens = inputTokens != null && outputTokens != null ? inputTokens + outputTokens : null;
+  const cfg = stateConfig[state];
 
   return (
     <div
       className={[
-        "flex items-center gap-3 flex-wrap",
-        "px-4 py-2",
-        "bg-[var(--color-bg-surface)] border-b border-[var(--color-border-subtle)]",
+        "flex items-center gap-1.5 flex-wrap",
+        "px-3 py-1.5",
+        "bg-[var(--color-bg-inset)] rounded-t-lg",
         className,
       ].join(" ")}
     >
-      {/* State */}
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--color-text-secondary)]">
-        {state === "running" && (
+      <span className={["inline-flex items-center gap-1 text-[11px] font-medium", cfg.textColor].join(" ")}>
+        {state === "running" ? (
           <span className="relative flex h-1.5 w-1.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-accent)] opacity-60" />
             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[var(--color-accent)]" />
           </span>
+        ) : (
+          <span className={["inline-block h-1.5 w-1.5 rounded-full", cfg.dotColor].join(" ")} />
         )}
-        <span className={state === "running" ? "text-[var(--color-accent)]" : ""}>
-          {stateLabels[state]}
-        </span>
+        {cfg.label}
       </span>
 
-      {/* Separator */}
-      <span className="h-3 w-px bg-[var(--color-border-default)]" />
-
-      {/* Model */}
       {model && (
-        <span className="text-xs font-mono text-[var(--color-text-tertiary)]">
+        <span className="inline-flex items-center text-[11px] font-mono text-[var(--color-text-tertiary)] bg-[var(--color-bg-surface)] rounded px-1.5 py-0.5">
           {model}
         </span>
       )}
 
-      {/* Separator */}
-      {model && totalTokens != null && <span className="h-3 w-px bg-[var(--color-border-default)]" />}
-
-      {/* Tokens */}
-      {totalTokens != null && (
-        <span className="text-xs font-mono text-[var(--color-text-tertiary)]">
-          {totalTokens.toLocaleString()} tokens
+      {totalTokens != null && costUsd != null ? (
+        <span className="inline-flex items-center text-[11px] font-mono text-[var(--color-text-tertiary)] bg-[var(--color-bg-surface)] rounded px-1.5 py-0.5">
+          {formatTokenCount(totalTokens)} tkn / ${parseFloat(costUsd).toFixed(2)}
         </span>
-      )}
-
-      {/* Cost */}
-      {costUsd != null && (
-        <span className="text-xs font-mono text-[var(--color-text-tertiary)]">
-          ${parseFloat(costUsd).toFixed(4)}
+      ) : totalTokens != null ? (
+        <span className="inline-flex items-center text-[11px] font-mono text-[var(--color-text-tertiary)] bg-[var(--color-bg-surface)] rounded px-1.5 py-0.5">
+          {formatTokenCount(totalTokens)} tkn
         </span>
-      )}
-
-      {/* Context */}
-      {contextWindow != null && (
-        <span className="text-xs font-mono text-[var(--color-text-tertiary)]">
-          context {contextWindow.toLocaleString()}
+      ) : costUsd != null ? (
+        <span className="inline-flex items-center text-[11px] font-mono text-[var(--color-text-tertiary)] bg-[var(--color-bg-surface)] rounded px-1.5 py-0.5">
+          ${parseFloat(costUsd).toFixed(2)}
         </span>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import Markdown from "react-markdown";
@@ -28,6 +28,7 @@ export function SessionPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const timelineRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [inputText, setInputText] = useState("");
 
   const store = useSessionStore();
@@ -41,7 +42,6 @@ export function SessionPage() {
   const inputTokens = sessionData_?.inputTokens ?? null;
   const outputTokens = sessionData_?.outputTokens ?? null;
   const totalCostUsd = sessionData_?.totalCostUsd ?? null;
-  const contextWindow = sessionData_?.contextWindow ?? null;
 
   const { data: sessionData, refetch: refetchSession } = useQuery({
     queryKey: ["session", sessionId],
@@ -263,7 +263,17 @@ export function SessionPage() {
     });
     sendMessage.mutate(text);
     setInputText("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "44px";
+    }
   };
+
+  const handleTextareaInput = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value);
+    const el = e.target;
+    el.style.height = "44px";
+    el.style.height = Math.min(el.scrollHeight, 120) + "px";
+  }, []);
 
   const canSend = sessionStatus === "running" || sessionStatus === "idle" || sessionStatus === "completed" || sessionStatus === "error";
 
@@ -276,7 +286,7 @@ export function SessionPage() {
     error: "出错",
   };
 
-  const statusVariantMap: Record<string, any> = {
+  const statusVariantMap: Record<string, "online" | "idle" | "warning" | "info" | "neutral" | "error"> = {
     running: "online",
     idle: "idle",
     waiting_approval: "warning",
@@ -287,7 +297,7 @@ export function SessionPage() {
 
   return (
     <section className="h-screen flex flex-col overflow-hidden bg-[var(--color-bg-base)]">
-      <header className="flex-shrink-0 flex items-center justify-between gap-3 px-4 h-12 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)]">
+      <header className="flex-shrink-0 flex items-center justify-between gap-3 px-4 h-12 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] z-[var(--z-sticky)]">
         <div className="flex items-center gap-2 min-w-0">
           <button
             type="button"
@@ -352,16 +362,7 @@ export function SessionPage() {
         />
       </header>
 
-      <RuntimeBar
-        model={currentModel}
-        inputTokens={inputTokens}
-        outputTokens={outputTokens}
-        costUsd={totalCostUsd}
-        contextWindow={contextWindow}
-        state={sessionStatus as any}
-      />
-
-      <div className="flex-1 overflow-y-auto px-4 py-3" ref={timelineRef}>
+      <div className="flex-1 overflow-y-auto px-4 py-3 pb-[140px]" ref={timelineRef}>
         {outputChunks.length === 0 && pendingApprovals.length === 0 && toolCalls.length === 0 && (
           <EmptyState
             title={
@@ -377,40 +378,64 @@ export function SessionPage() {
           />
         )}
 
-        {renderTimeline(outputChunks, toolCalls, pendingApprovals, respondApproval, stopSession)}
+        {renderTimeline(outputChunks, toolCalls, pendingApprovals, respondApproval, stopSession, sessionStatus)}
       </div>
 
-      <footer className="flex-shrink-0 border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)]/90 backdrop-blur-md px-4 py-3 safe-bottom">
-        <div className="flex items-center gap-2">
-          <Input
-            type="text"
+      <footer className="fixed bottom-0 left-0 right-0 z-[var(--z-fixed)] bg-[var(--color-bg-surface)]/95 backdrop-blur-md border-t border-[var(--color-border-subtle)] safe-bottom">
+        <RuntimeBar
+          model={currentModel}
+          inputTokens={inputTokens}
+          outputTokens={outputTokens}
+          costUsd={totalCostUsd}
+          state={sessionStatus as any}
+        />
+        <div className="flex items-end gap-2 px-3 py-2">
+          <textarea
+            ref={textareaRef}
             placeholder={
               sessionStatus === "running"
                 ? "Claude 正在思考..."
-                : "输入消息发送给 Claude"
+                : "输入消息..."
             }
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            onChange={handleTextareaInput}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
             disabled={!canSend}
-            className="flex-1"
+            rows={1}
+            className={[
+              "flex-1 resize-none rounded-xl border border-[var(--color-border-subtle)]",
+              "bg-[var(--color-bg-inset)] px-3 py-2.5 text-sm",
+              "text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]",
+              "focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)]/30",
+              "transition-colors duration-[var(--duration-fast)]",
+              "min-h-[44px] max-h-[120px]",
+              "leading-[20px]",
+            ].join(" ")}
           />
-          <Button
-            variant="primary"
-            size="md"
-            onClick={handleSend}
-            disabled={!inputText.trim() || !canSend}
-          >
-            发送
-          </Button>
-          {sessionStatus === "running" && (
+          {sessionStatus === "running" ? (
             <Button
               variant="danger"
               size="md"
               onClick={() => stopSession.mutate()}
               disabled={stopSession.isPending}
+              className="flex-shrink-0 h-[44px]"
             >
               停止
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              size="md"
+              onClick={handleSend}
+              disabled={!inputText.trim() || !canSend}
+              className="flex-shrink-0 h-[44px]"
+            >
+              发送
             </Button>
           )}
         </div>
@@ -428,16 +453,52 @@ type StopSessionFn = {
   isPending: boolean;
 };
 
+function mergeThinkingChunks(chunks: OutputChunk[]): Array<OutputChunk | { kind: "thinking"; text: string; eventId: string; timestamp: string; merged: true }> {
+  const result: Array<OutputChunk | { kind: "thinking"; text: string; eventId: string; timestamp: string; merged: true }> = [];
+  let thinkingBuf: string[] = [];
+  let thinkingTs = "";
+
+  const flushThinking = () => {
+    if (thinkingBuf.length === 0) return;
+    result.push({
+      kind: "thinking",
+      text: thinkingBuf.join("\n"),
+      eventId: `merged-thinking-${result.length}`,
+      timestamp: thinkingTs,
+      merged: true,
+    });
+    thinkingBuf = [];
+    thinkingTs = "";
+  };
+
+  for (let i = 0; i < chunks.length; i++) {
+    const c = chunks[i]!;
+    if (c.kind === "thinking") {
+      if (thinkingBuf.length === 0) thinkingTs = c.timestamp;
+      thinkingBuf.push(c.text);
+    } else {
+      flushThinking();
+      result.push(c);
+    }
+  }
+  flushThinking();
+
+  return result;
+}
+
 function renderTimeline(
   chunks: OutputChunk[],
   toolCalls: any[],
   approvals: any[],
   respondApproval: RespondApprovalFn,
   stopSession: StopSessionFn,
+  sessionStatus: string,
 ) {
+  const mergedChunks = mergeThinkingChunks(chunks);
+
   const items: Array<{ type: "chunk" | "tool" | "approval"; ts: string; data: any }> = [];
 
-  for (const c of chunks) {
+  for (const c of mergedChunks) {
     items.push({ type: "chunk", ts: c.timestamp, data: c });
   }
   for (const t of toolCalls) {
@@ -449,9 +510,11 @@ function renderTimeline(
 
   items.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
 
+  const isRunningThinking = sessionStatus === "running" && mergedChunks.length > 0 && mergedChunks[mergedChunks.length - 1]?.kind === "thinking";
+
   return items.map((item, i) => {
     if (item.type === "chunk") {
-      const chunk = item.data as OutputChunk;
+      const chunk = item.data;
       if (chunk.kind === "user") {
         return (
           <TimelineItem key={`${chunk.eventId}-${i}`} kind="user">
@@ -460,13 +523,24 @@ function renderTimeline(
         );
       }
       if (chunk.kind === "thinking") {
+        const isLast = i === items.length - 1;
+        const showThinkingAnimation = isLast && isRunningThinking;
         return (
           <TimelineItem key={`${chunk.eventId}-${i}`} kind="thinking">
-            <details className="text-xs">
-              <summary className="cursor-pointer text-[var(--color-text-tertiary)] select-none">
-                Thinking...
+            <details className="text-xs" open={showThinkingAnimation ? undefined : undefined}>
+              <summary className="cursor-pointer text-[var(--color-text-tertiary)] select-none inline-flex items-center gap-1.5">
+                {showThinkingAnimation ? (
+                  <>
+                    <span className="thinking-dots">
+                      <span>.</span><span>.</span><span>.</span>
+                    </span>
+                    Thinking
+                  </>
+                ) : (
+                  "Thinking..."
+                )}
               </summary>
-              <p className="mt-1 pl-2 border-l-2 border-[var(--color-border-default)] text-[var(--color-text-muted)]">
+              <p className="mt-1 pl-2 border-l-2 border-[var(--color-border-default)] text-[var(--color-text-muted)] whitespace-pre-wrap break-words">
                 {chunk.text}
               </p>
             </details>
@@ -475,8 +549,10 @@ function renderTimeline(
       }
       return (
         <TimelineItem key={`${chunk.eventId}-${i}`} kind="agent">
-          <div className="text-sm text-[var(--color-text-primary)] leading-relaxed prose prose-sm max-w-none">
-            <Markdown remarkPlugins={[remarkGfm]}>{chunk.text}</Markdown>
+          <div className="overflow-x-auto max-w-full">
+            <div className="text-sm text-[var(--color-text-primary)] leading-relaxed prose prose-sm max-w-none">
+              <Markdown remarkPlugins={[remarkGfm]}>{chunk.text}</Markdown>
+            </div>
           </div>
         </TimelineItem>
       );

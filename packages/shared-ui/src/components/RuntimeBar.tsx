@@ -31,6 +31,7 @@ export function RuntimeBar({
   inputTokens,
   outputTokens,
   costUsd,
+  contextWindow,
   state = "idle",
   className = "",
 }: Props) {
@@ -77,6 +78,12 @@ export function RuntimeBar({
           ${parseFloat(costUsd).toFixed(2)}
         </span>
       ) : null}
+
+      {contextWindow != null && (
+        <span className="inline-flex items-center text-[11px] font-mono text-[var(--color-text-tertiary)] bg-[var(--color-bg-surface)] rounded px-1.5 py-0.5">
+          ctx {formatTokenCount(contextWindow)}
+        </span>
+      )}
     </div>
   );
 }

@@ -43,6 +43,10 @@ export const apiClient = {
 
   listSessions: (projectId: string) =>
     api<{ data: Session[] }>(`/api/projects/${projectId}/sessions`),
+  listProjectFiles: (projectId: string, relativePath?: string) =>
+    api<{ data: { entries: Array<{ name: string; type: "file" | "directory"; size: number; modifiedAt: string }>; currentPath: string } }>(
+      `/api/projects/${projectId}/files${relativePath ? `?path=${encodeURIComponent(relativePath)}` : ""}`,
+    ),
   getSession: (sessionId: string) =>
     api<{ data: Session }>(`/api/sessions/${sessionId}`),
   getMessages: (sessionId: string, afterSeq?: number) =>

@@ -120,4 +120,24 @@ export async function registerProjectRoutes(
       }
     },
   );
+
+  app.get<{ Params: { projectId: string }; Querystring: { path?: string } }>(
+    "/api/projects/:projectId/files",
+    async (request, reply) => {
+      try {
+        const { entries, currentPath } = await projectService.listFiles(
+          request.params.projectId,
+          request.query.path ?? ".",
+        );
+        return { data: { entries, currentPath } };
+      } catch (error) {
+        if (error instanceof ProjectServiceError) {
+          const statusCode = error.code === "PROJECT_NOT_FOUND" ? 404 : 400;
+          reply.code(statusCode);
+          return { error: { code: error.code, message: error.message } };
+        }
+        throw error;
+      }
+    },
+  );
 }

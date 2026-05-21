@@ -3,6 +3,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { eq } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
+import { readdir, stat } from "node:fs/promises";
 
 import type { AppDatabase } from "../../infra/database.js";
 import { projects, sessions, fileChanges, sessionEvents, approvalRequests } from "../../infra/schema.js";
@@ -18,6 +19,13 @@ export type ProjectRecord = {
   updatedAt: string;
   gitBranch: string | null;
   uncommittedChanges: number;
+};
+
+export type FileEntry = {
+  name: string;
+  type: "file" | "directory";
+  size: number;
+  modifiedAt: string;
 };
 
 export class ProjectServiceError extends Error {
@@ -242,5 +250,54 @@ export class ProjectService {
     await this.db.delete(sessions).where(eq(sessions.projectId, projectId));
     await this.db.delete(fileChanges).where(eq(fileChanges.projectId, projectId));
     await this.db.delete(projects).where(eq(projects.id, projectId));
+  }
+
+  async listFiles(projectId: string, relativePath = "."): Promise<{ entries: FileEntry[]; currentPath: string }> {
+    const project = this.db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .get();
+
+    if (!project) {
+      throw new ProjectServiceError("项目不存在。", "PROJECT_NOT_FOUND");
+    }
+
+    const targetPath = path.join(project.rootPath, relativePath);
+    const resolved = path.resolve(targetPath);
+    const rootResolved = path.resolve(project.rootPath);
+
+    if (!resolved.startsWith(rootResolved)) {
+      throw new ProjectServiceError("非法路径。", "INVALID_PATH");
+    }
+
+    if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+      throw new ProjectServiceError("路径不存在。", "PATH_NOT_FOUND");
+    }
+
+    const entries = await readdir(resolved, { withFileTypes: true });
+    const result: FileEntry[] = [];
+
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue;
+      const fullPath = path.join(resolved, entry.name);
+      const s = await stat(fullPath);
+      result.push({
+        name: entry.name,
+        type: entry.isDirectory() ? "directory" : "file",
+        size: s.size,
+        modifiedAt: s.mtime.toISOString(),
+      });
+    }
+
+    result.sort((a, b) => {
+      if (a.type === b.type) return a.name.localeCompare(b.name);
+      return a.type === "directory" ? -1 : 1;
+    });
+
+    return {
+      entries: result,
+      currentPath: relativePath,
+    };
   }
 }

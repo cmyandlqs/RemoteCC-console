@@ -16,6 +16,8 @@ export function ProjectsPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [promptInput, setPromptInput] = useState("");
+  const [showFileDrawer, setShowFileDrawer] = useState(false);
+  const [filePath, setFilePath] = useState(".");
 
   const { data: projectData, isLoading: loadingProject } = useQuery({
     queryKey: ["project", projectId],
@@ -29,6 +31,12 @@ export function ProjectsPage() {
     enabled: !!projectId,
   });
 
+  const { data: filesData, isLoading: loadingFiles } = useQuery({
+    queryKey: ["project-files", projectId, filePath],
+    queryFn: () => apiClient.listProjectFiles(projectId!, filePath),
+    enabled: !!projectId && showFileDrawer,
+  });
+
   const createSession = useMutation({
     mutationFn: (prompt: string) => apiClient.createSession(projectId!, prompt),
     onSuccess: (result, prompt) => {
@@ -40,6 +48,8 @@ export function ProjectsPage() {
 
   const project = projectData;
   const sessions = sessionsData?.data ?? [];
+  const fileEntries = filesData?.data?.entries ?? [];
+  const currentFilePath = filesData?.data?.currentPath ?? ".";
 
   if (loadingProject && !project) {
     return <LoadingState rows={3} />;
@@ -69,6 +79,27 @@ export function ProjectsPage() {
     disconnected: "离线",
   };
 
+  const navigateDir = (name: string) => {
+    if (currentFilePath === ".") {
+      setFilePath(name);
+    } else {
+      setFilePath(`${currentFilePath}/${name}`);
+    }
+  };
+
+  const goUp = () => {
+    if (currentFilePath === ".") return;
+    const parts = currentFilePath.split("/");
+    parts.pop();
+    setFilePath(parts.length === 0 ? "." : parts.join("/"));
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return (
     <section className="px-4 pt-5 pb-2">
       <div className="mb-6">
@@ -96,6 +127,14 @@ export function ProjectsPage() {
               </span>
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => { setShowFileDrawer(true); setFilePath("."); }}
+            className="mt-2 inline-flex items-center gap-1.5 text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors"
+          >
+            <FolderOpenIcon />
+            查看文件
+          </button>
         </div>
       </div>
 
@@ -201,6 +240,72 @@ export function ProjectsPage() {
           );
         })}
       </div>
+
+      {/* File Browser Drawer */}
+      {showFileDrawer && (
+        <div
+          className="fixed inset-0 z-[var(--z-modal-backdrop)] bg-black/20 backdrop-blur-sm"
+          onClick={() => setShowFileDrawer(false)}
+        />
+      )}
+      {showFileDrawer && (
+        <div className="fixed bottom-0 left-0 right-0 z-[var(--z-modal)] bg-[var(--color-bg-surface)] rounded-t-2xl border-t border-[var(--color-border-subtle)] shadow-lg max-h-[70vh] flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-subtle)]">
+            <div className="flex items-center gap-2 min-w-0">
+              {currentFilePath !== "." && (
+                <button
+                  type="button"
+                  onClick={goUp}
+                  className="inline-flex items-center justify-center w-7 h-7 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-bg-surface-hover)] transition-colors"
+                >
+                  <ChevronLeftIcon />
+                </button>
+              )}
+              <span className="text-sm font-medium text-[var(--color-text-primary)] truncate">
+                {currentFilePath === "." ? "文件" : currentFilePath}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowFileDrawer(false)}
+              className="inline-flex items-center justify-center w-7 h-7 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-bg-surface-hover)] transition-colors"
+            >
+              <CloseIcon />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-2 py-1">
+            {loadingFiles && (
+              <div className="py-8 text-center text-xs text-[var(--color-text-muted)]">加载中...</div>
+            )}
+
+            {fileEntries.length === 0 && !loadingFiles && (
+              <div className="py-8 text-center text-xs text-[var(--color-text-muted)]">空文件夹</div>
+            )}
+
+            <div className="space-y-0.5">
+              {fileEntries.map((entry) => (
+                <button
+                  key={entry.name}
+                  type="button"
+                  onClick={() => entry.type === "directory" ? navigateDir(entry.name) : undefined}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-[var(--color-bg-inset)] transition-colors"
+                >
+                  <span className="flex-shrink-0 text-[var(--color-text-muted)]">
+                    {entry.type === "directory" ? <FolderIcon /> : <FileIcon />}
+                  </span>
+                  <span className="flex-1 min-w-0 text-sm text-[var(--color-text-primary)] truncate">
+                    {entry.name}
+                  </span>
+                  <span className="flex-shrink-0 text-[11px] text-[var(--color-text-muted)] tabular-nums">
+                    {entry.type === "file" ? formatFileSize(entry.size) : "—"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -244,6 +349,41 @@ function SparkleIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-accent)]">
       <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z" />
+    </svg>
+  );
+}
+
+function FolderOpenIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 17h12M6 17l3-6h6l3 6M6 17l-2-9h16l-2 9" />
+      <path d="M4 8h16" />
+    </svg>
+  );
+}
+
+function FolderIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-status-warning)]">
+      <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+    </svg>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   );
 }

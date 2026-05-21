@@ -42,6 +42,7 @@ export function SessionPage() {
   const inputTokens = sessionData_?.inputTokens ?? null;
   const outputTokens = sessionData_?.outputTokens ?? null;
   const totalCostUsd = sessionData_?.totalCostUsd ?? null;
+  const contextWindow = sessionData_?.contextWindow ?? null;
 
   const { data: sessionData, refetch: refetchSession } = useQuery({
     queryKey: ["session", sessionId],
@@ -387,6 +388,7 @@ export function SessionPage() {
           inputTokens={inputTokens}
           outputTokens={outputTokens}
           costUsd={totalCostUsd}
+          contextWindow={contextWindow}
           state={sessionStatus as any}
         />
         <div className="flex items-end gap-2 px-3 py-2">

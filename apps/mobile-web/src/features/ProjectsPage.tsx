@@ -18,6 +18,7 @@ export function ProjectsPage() {
   const [promptInput, setPromptInput] = useState("");
   const [showFileDrawer, setShowFileDrawer] = useState(false);
   const [filePath, setFilePath] = useState(".");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { data: projectData, isLoading: loadingProject } = useQuery({
     queryKey: ["project", projectId],
@@ -46,8 +47,20 @@ export function ProjectsPage() {
     },
   });
 
+  const deleteSession = useMutation({
+    mutationFn: (id: string) => apiClient.deleteSession(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sessions", projectId] });
+      setDeletingId(null);
+    },
+  });
+
   const project = projectData;
-  const sessions = sessionsData?.data ?? [];
+  const sessions = [...(sessionsData?.data ?? [])].sort((a, b) => {
+    const ta = a.lastActiveAt ?? a.createdAt;
+    const tb = b.lastActiveAt ?? b.createdAt;
+    return new Date(tb).getTime() - new Date(ta).getTime();
+  });
   const fileEntries = filesData?.data?.entries ?? [];
   const currentFilePath = filesData?.data?.currentPath ?? ".";
 
@@ -162,10 +175,7 @@ export function ProjectsPage() {
             "transition-colors duration-[var(--duration-fast)]",
           ].join(" ")}
         />
-        <div className="flex items-center justify-between mt-3">
-          <span className="text-[11px] text-[var(--color-text-muted)]">
-            Enter 发送 · Shift+Enter 换行
-          </span>
+        <div className="flex items-center justify-end mt-3">
           <Button
             variant="primary"
             size="md"
@@ -201,42 +211,48 @@ export function ProjectsPage() {
         {sessions.map((session) => {
           const isActive = session.status === "running" || session.status === "waiting_approval";
           return (
-            <Link key={session.id} to={`/sessions/${session.id}`}>
-              <Card
-                padding="md"
-                hover
-                className={[
-                  "flex items-center justify-between gap-3",
-                  isActive ? "border-l-2 border-l-[var(--color-status-online)]" : "",
-                  session.status === "error" ? "border-l-2 border-l-[var(--color-status-error)]" : "",
-                ].join(" ")}
-              >
-                <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <div className="flex-shrink-0 mt-0.5 text-[var(--color-text-muted)]">
-                    <TerminalIcon />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[15px] font-medium text-[var(--color-text-primary)] truncate">
-                        {session.name ?? "未命名会话"}
-                      </span>
-                      <StatusBadge variant={statusVariantMap[session.status] as any ?? "neutral"}>
-                        {statusLabelMap[session.status] ?? session.status}
-                      </StatusBadge>
-                    </div>
-                    <p className="text-xs text-[var(--color-text-muted)]">
-                      {session.model ?? "—"}
-                      {session.lastActiveAt && (
-                        <span className="ml-2">
-                          {formatRelativeTime(session.lastActiveAt)}
-                        </span>
-                      )}
-                    </p>
-                  </div>
+            <Card
+              key={session.id}
+              padding="md"
+              hover
+              className={[
+                "flex items-center justify-between gap-3",
+                isActive ? "border-l-2 border-l-[var(--color-status-online)]" : "",
+                session.status === "error" ? "border-l-2 border-l-[var(--color-status-error)]" : "",
+              ].join(" ")}
+              onClick={() => !deletingId && navigate(`/sessions/${session.id}`)}
+            >
+              <div className="flex items-start gap-3 flex-1 min-w-0">
+                <div className="flex-shrink-0 mt-0.5 text-[var(--color-text-muted)]">
+                  <TerminalIcon />
                 </div>
-                <ChevronRightIcon />
-              </Card>
-            </Link>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[15px] font-medium text-[var(--color-text-primary)] truncate">
+                      {session.name ?? "未命名会话"}
+                    </span>
+                    <StatusBadge variant={statusVariantMap[session.status] as any ?? "neutral"}>
+                      {statusLabelMap[session.status] ?? session.status}
+                    </StatusBadge>
+                  </div>
+                  <p className="text-xs text-[var(--color-text-muted)]">
+                    {session.model ?? "—"}
+                    {session.lastActiveAt && (
+                      <span className="ml-2">
+                        {formatRelativeTime(session.lastActiveAt)}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setDeletingId(session.id); }}
+                className="flex-shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-status-error)] hover:bg-[var(--color-status-error-bg)] transition-colors"
+              >
+                <TrashIcon />
+              </button>
+            </Card>
           );
         })}
       </div>
@@ -305,6 +321,34 @@ export function ProjectsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Delete Confirmation */}
+      {deletingId && (
+        <>
+          <div
+            className="fixed inset-0 z-[var(--z-modal-backdrop)] bg-black/20 backdrop-blur-sm"
+            onClick={() => setDeletingId(null)}
+          />
+          <div className="fixed bottom-0 left-0 right-0 z-[var(--z-modal)] bg-[var(--color-bg-surface)] rounded-t-2xl border-t border-[var(--color-border-subtle)] shadow-lg p-5">
+            <h3 className="text-base font-semibold text-[var(--color-text-primary)] mb-2">删除会话</h3>
+            <p className="text-sm text-[var(--color-text-secondary)] mb-5">确定要删除这个会话吗？此操作不可撤销。</p>
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="md" className="flex-1" onClick={() => setDeletingId(null)}>
+                取消
+              </Button>
+              <Button
+                variant="danger"
+                size="md"
+                className="flex-1"
+                disabled={deleteSession.isPending}
+                onClick={() => deleteSession.mutate(deletingId)}
+              >
+                {deleteSession.isPending ? "删除中..." : "确认删除"}
+              </Button>
+            </div>
+          </div>
+        </>
       )}
     </section>
   );
@@ -384,6 +428,15 @@ function CloseIcon() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
     </svg>
   );
 }

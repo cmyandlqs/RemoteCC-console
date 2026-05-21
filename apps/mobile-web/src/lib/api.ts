@@ -67,6 +67,8 @@ export const apiClient = {
       method: "POST",
       body: JSON.stringify({ name }),
     }),
+  deleteSession: (sessionId: string) =>
+    api<void>(`/api/sessions/${sessionId}`, { method: "DELETE" }),
 
   listPendingApprovals: () => api<{ data: ApprovalRecord[] }>("/api/approvals/pending"),
   listSessionApprovals: (sessionId: string) =>

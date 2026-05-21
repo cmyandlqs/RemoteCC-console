@@ -51,6 +51,8 @@ export function ProjectsPage() {
     mutationFn: (id: string) => apiClient.deleteSession(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sessions", projectId] });
+    },
+    onSettled: () => {
       setDeletingId(null);
     },
   });

@@ -18,6 +18,17 @@ export type ApprovalItem = {
   payload: unknown;
 };
 
+export type ToolCallState = "pending" | "running" | "completed" | "error";
+
+export type ToolCallItem = {
+  toolUseId: string;
+  toolName: string;
+  state: ToolCallState;
+  input?: string | undefined;
+  output?: string | undefined;
+  timestamp: string;
+};
+
 export type OutputChunk = {
   eventId: string;
   text: string;
@@ -29,25 +40,30 @@ type SessionData = {
   status: SessionStatus;
   chunks: OutputChunk[];
   approvals: ApprovalItem[];
-};
-
-export type SessionStore = {
-  sessions: Record<string, SessionData>;
-  currentModel: string | null;
+  toolCalls: ToolCallItem[];
+  model: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
   totalCostUsd: string | null;
   contextWindow: number | null;
+};
+
+export type SessionStore = {
+  sessions: Record<string, SessionData>;
 
   getChunks: (sessionId: string) => OutputChunk[];
   getStatus: (sessionId: string) => SessionStatus;
   getApprovals: (sessionId: string) => ApprovalItem[];
+  getToolCalls: (sessionId: string) => ToolCallItem[];
+  getSessionData: (sessionId: string) => SessionData | undefined;
   appendChunk: (sessionId: string, chunk: OutputChunk) => void;
   setSessionStatus: (sessionId: string, status: SessionStatus) => void;
   clearSession: (sessionId: string) => void;
   addApproval: (item: ApprovalItem) => void;
   removeApproval: (approvalId: string) => void;
-  updateUsage: (data: {
+  addToolCall: (sessionId: string, toolCall: ToolCallItem) => void;
+  updateToolCall: (sessionId: string, toolUseId: string, update: Partial<ToolCallItem>) => void;
+  updateUsage: (sessionId: string, data: {
     model?: string | null;
     inputTokens?: number | null;
     outputTokens?: number | null;
@@ -57,42 +73,38 @@ export type SessionStore = {
   reset: () => void;
 };
 
-const initialShared = {
-  currentModel: null as string | null,
-  inputTokens: null as number | null,
-  outputTokens: null as number | null,
-  totalCostUsd: null as string | null,
-  contextWindow: null as number | null,
-};
+const emptySession = (): SessionData => ({
+  status: "idle",
+  chunks: [],
+  approvals: [],
+  toolCalls: [],
+  model: null,
+  inputTokens: null,
+  outputTokens: null,
+  totalCostUsd: null,
+  contextWindow: null,
+});
 
 function ensureSession(sessions: Record<string, SessionData>, sessionId: string): Record<string, SessionData> {
   if (sessions[sessionId]) return sessions;
-  return {
-    ...sessions,
-    [sessionId]: { status: "idle", chunks: [], approvals: [] },
-  };
+  return { ...sessions, [sessionId]: emptySession() };
 }
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: {},
-  ...initialShared,
 
   getChunks: (sessionId) => get().sessions[sessionId]?.chunks ?? [],
   getStatus: (sessionId) => get().sessions[sessionId]?.status ?? "idle",
   getApprovals: (sessionId) => get().sessions[sessionId]?.approvals ?? [],
+  getToolCalls: (sessionId) => get().sessions[sessionId]?.toolCalls ?? [],
+  getSessionData: (sessionId) => get().sessions[sessionId],
 
   appendChunk: (sessionId, chunk) =>
     set((s) => {
       const updated = ensureSession(s.sessions, sessionId);
       const prev = updated[sessionId]!;
       return {
-        sessions: {
-          ...updated,
-          [sessionId]: {
-            ...prev,
-            chunks: [...prev.chunks, chunk],
-          },
-        },
+        sessions: { ...updated, [sessionId]: { ...prev, chunks: [...prev.chunks, chunk] } },
       };
     }),
 
@@ -101,10 +113,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const updated = ensureSession(s.sessions, sessionId);
       const prev = updated[sessionId]!;
       return {
-        sessions: {
-          ...updated,
-          [sessionId]: { ...prev, status },
-        },
+        sessions: { ...updated, [sessionId]: { ...prev, status } },
       };
     }),
 
@@ -112,10 +121,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const updated = ensureSession(s.sessions, sessionId);
       return {
-        sessions: {
-          ...updated,
-          [sessionId]: { status: "idle", chunks: [], approvals: [] },
-        },
+        sessions: { ...updated, [sessionId]: emptySession() },
       };
     }),
 
@@ -127,11 +133,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       return {
         sessions: {
           ...updated,
-          [sid]: {
-            ...prev,
-            approvals: [...prev.approvals, item],
-            status: "waiting_approval",
-          },
+          [sid]: { ...prev, approvals: [...prev.approvals, item], status: "waiting_approval" },
         },
       };
     }),
@@ -148,14 +150,50 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       return { sessions: newSessions };
     }),
 
-  updateUsage: (data) =>
-    set((s) => ({
-      currentModel: data.model ?? s.currentModel,
-      inputTokens: data.inputTokens ?? s.inputTokens,
-      outputTokens: data.outputTokens ?? s.outputTokens,
-      totalCostUsd: data.totalCostUsd ?? s.totalCostUsd,
-      contextWindow: data.contextWindow ?? s.contextWindow,
-    })),
+  addToolCall: (sessionId, toolCall) =>
+    set((s) => {
+      const updated = ensureSession(s.sessions, sessionId);
+      const prev = updated[sessionId]!;
+      return {
+        sessions: { ...updated, [sessionId]: { ...prev, toolCalls: [...prev.toolCalls, toolCall] } },
+      };
+    }),
 
-  reset: () => set({ sessions: {}, ...initialShared }),
+  updateToolCall: (sessionId, toolUseId, update) =>
+    set((s) => {
+      const updated = ensureSession(s.sessions, sessionId);
+      const prev = updated[sessionId]!;
+      return {
+        sessions: {
+          ...updated,
+          [sessionId]: {
+            ...prev,
+            toolCalls: prev.toolCalls.map((tc) =>
+              tc.toolUseId === toolUseId ? { ...tc, ...update } : tc
+            ),
+          },
+        },
+      };
+    }),
+
+  updateUsage: (sessionId, data) =>
+    set((s) => {
+      const updated = ensureSession(s.sessions, sessionId);
+      const prev = updated[sessionId]!;
+      return {
+        sessions: {
+          ...updated,
+          [sessionId]: {
+            ...prev,
+            model: data.model ?? prev.model,
+            inputTokens: data.inputTokens ?? prev.inputTokens,
+            outputTokens: data.outputTokens ?? prev.outputTokens,
+            totalCostUsd: data.totalCostUsd ?? prev.totalCostUsd,
+            contextWindow: data.contextWindow ?? prev.contextWindow,
+          },
+        },
+      };
+    }),
+
+  reset: () => set({ sessions: {} }),
 }));

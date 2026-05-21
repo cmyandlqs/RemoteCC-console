@@ -156,7 +156,7 @@ export type SessionUsageUpdatedPayload = {
 };
 
 export type SessionCompletedPayload = {
-  reason?: string;
+  result?: string;
 };
 
 export type SessionErrorPayload = {

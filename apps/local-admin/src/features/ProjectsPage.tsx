@@ -2,13 +2,24 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../lib/api";
+import {
+  Card,
+  Button,
+  Input,
+  SectionHeader,
+  EmptyState,
+  LoadingState,
+  ErrorState,
+  IconButton,
+} from "@agent-console/shared-ui";
 
 export function ProjectsPage() {
   const qc = useQueryClient();
   const [pathInput, setPathInput] = useState("");
   const [nameInput, setNameInput] = useState("");
+  const [showForm, setShowForm] = useState(false);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["projects"],
     queryFn: apiClient.listProjects,
   });
@@ -16,7 +27,12 @@ export function ProjectsPage() {
   const create = useMutation({
     mutationFn: ({ name, rootPath }: { name: string; rootPath: string }) =>
       apiClient.createProject(name, rootPath),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      setPathInput("");
+      setNameInput("");
+      setShowForm(false);
+    },
   });
 
   const deletePrj = useMutation({
@@ -29,70 +45,139 @@ export function ProjectsPage() {
     const name = (nameInput.trim() || path.split("/").pop()) ?? "未命名项目";
     if (!path) return;
     create.mutate({ name, rootPath: path });
-    setPathInput("");
-    setNameInput("");
   };
 
+  const projects = data?.data ?? [];
+
   return (
-    <section className="panel">
-      <h2>项目管理</h2>
-      <div className="stack">
-        <div className="row-card">
-          <div className="form-row">
-            <input
-              type="text"
+    <div className="max-w-3xl">
+      <SectionHeader
+        title="Workspaces"
+        description="管理已注册的项目目录"
+        action={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowForm((v) => !v)}
+          >
+            {showForm ? "取消" : "添加项目"}
+          </Button>
+        }
+      />
+
+      {/* Inline add form */}
+      {showForm && (
+        <Card padding="md" className="mb-4 animate-in fade-in slide-in-from-top-2 duration-[var(--duration-normal)]">
+          <div className="flex flex-wrap gap-2">
+            <Input
               placeholder="/home/user/projects/my-project"
               value={pathInput}
               onChange={(e) => setPathInput(e.target.value)}
+              className="flex-1 min-w-[200px]"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAdd();
+              }}
             />
-            <input
-              type="text"
+            <Input
               placeholder="项目名称（可选）"
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
+              className="w-48"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAdd();
+              }}
             />
-            <button type="button" onClick={handleAdd} disabled={create.isPending}>
-              {create.isPending ? "添加中..." : "添加项目"}
-            </button>
+            <Button
+              variant="primary"
+              size="md"
+              disabled={create.isPending || !pathInput.trim()}
+              onClick={handleAdd}
+            >
+              {create.isPending ? "添加中..." : "添加"}
+            </Button>
           </div>
           {create.error && (
-            <p className="error-hint">{String(create.error)}</p>
+            <p className="mt-2 text-xs text-[var(--color-status-error)]">
+              {String(create.error)}
+            </p>
           )}
-        </div>
+        </Card>
+      )}
 
-        {isLoading && <p className="loading-hint">加载中...</p>}
-        {error && <p className="error-hint">{String(error)}</p>}
+      {isLoading && <LoadingState rows={3} />}
+      {error && <ErrorState message={String(error)} retry={() => void refetch()} />}
 
-        {data?.data?.length === 0 && (
-          <p className="empty-hint">暂无已注册项目，请添加。</p>
-        )}
+      {!isLoading && !error && projects.length === 0 && (
+        <EmptyState
+          title="暂无已注册项目"
+          description="请添加项目目录以开始使用"
+        />
+      )}
 
-        {data?.data?.map((project) => (
-          <div key={project.id} className="row-card project-row">
-            <div>
-              <strong>{project.name}</strong>
-              <p className="project-path">{project.rootPath}</p>
-              <p className="project-meta">
-                分支：{project.gitBranch ?? "—"}&nbsp;
-                · 未提交：{project.uncommittedChanges} 个文件
+      <div className="space-y-2">
+        {projects.map((project) => (
+          <Card
+            key={project.id}
+            padding="md"
+            hover
+            className="flex items-start justify-between gap-4"
+          >
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-[var(--color-text-primary)]">
+                  {project.name}
+                </span>
+                {project.gitBranch && (
+                  <span className="text-xs font-mono text-[var(--color-text-tertiary)] bg-[var(--color-bg-inset)] px-1.5 py-0.5 rounded">
+                    {project.gitBranch}
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-xs text-[var(--color-text-tertiary)] font-mono truncate">
+                {project.rootPath}
+              </p>
+              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                {project.uncommittedChanges > 0
+                  ? `${project.uncommittedChanges} 个未提交文件`
+                  : "工作区干净"}
+                {project.lastActiveAt && (
+                  <span className="ml-2">· {new Date(project.lastActiveAt).toLocaleDateString()}</span>
+                )}
               </p>
             </div>
-            <div className="actions">
+            <div className="flex items-center gap-1 flex-shrink-0">
               <Link to={`/projects/${project.id}/sessions`}>
-                查看会话
+                <IconButton label="查看会话">
+                  <ArrowRightIcon />
+                </IconButton>
               </Link>
-              <button
-                type="button"
-                className="btn-danger"
+              <IconButton
+                label="删除项目"
+                className="hover:bg-[var(--color-status-error-bg)] hover:text-[var(--color-status-error)]"
                 onClick={() => deletePrj.mutate(project.id)}
-                disabled={deletePrj.isPending}
               >
-                删除
-              </button>
+                <TrashIcon />
+              </IconButton>
             </div>
-          </div>
+          </Card>
         ))}
       </div>
-    </section>
+    </div>
+  );
+}
+
+function ArrowRightIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h14M12 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+    </svg>
   );
 }

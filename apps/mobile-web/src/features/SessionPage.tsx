@@ -6,15 +6,22 @@ import remarkGfm from "remark-gfm";
 import { apiClient } from "../lib/api.js";
 import { wsClient, type WsEnvelope } from "../lib/ws.js";
 import { useSessionStore, type SessionStatus, type OutputChunk } from "../stores/session-store.js";
+import {
+  Button,
+  Input,
+  StatusDot,
+  RuntimeBar,
+  TimelineItem,
+  ToolCallCard,
+  ApprovalCard,
+  EmptyState,
+} from "@agent-console/shared-ui";
 
 const VALID_SESSION_STATUSES: Set<string> = new Set([
-  "idle",
-  "running",
-  "waiting_approval",
-  "completed",
-  "stopped",
-  "error",
+  "idle", "running", "waiting_approval", "completed", "stopped", "error",
 ]);
+
+const TERMINAL_STATES: Set<string> = new Set(["completed", "error"]);
 
 export function SessionPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -27,8 +34,14 @@ export function SessionPage() {
   const sessionStatus = sessionId ? store.getStatus(sessionId) : "idle";
   const outputChunks: OutputChunk[] = sessionId ? store.getChunks(sessionId) : [];
   const pendingApprovals = sessionId ? store.getApprovals(sessionId) : [];
+  const toolCalls = sessionId ? store.getToolCalls(sessionId) : [];
+  const sessionData_ = sessionId ? store.getSessionData(sessionId) : null;
 
-  const { currentModel, inputTokens, outputTokens, totalCostUsd, contextWindow } = store;
+  const currentModel = sessionData_?.model ?? null;
+  const inputTokens = sessionData_?.inputTokens ?? null;
+  const outputTokens = sessionData_?.outputTokens ?? null;
+  const totalCostUsd = sessionData_?.totalCostUsd ?? null;
+  const contextWindow = sessionData_?.contextWindow ?? null;
 
   const { data: sessionData, refetch: refetchSession } = useQuery({
     queryKey: ["session", sessionId],
@@ -71,17 +84,18 @@ export function SessionPage() {
     if (VALID_SESSION_STATUSES.has(session.status) && sessionId) {
       store.setSessionStatus(sessionId, session.status as SessionStatus);
     }
-    store.updateUsage({
-      model: session.model,
-      inputTokens: session.inputTokens,
-      outputTokens: session.outputTokens,
-      totalCostUsd: session.totalCostUsd,
-      contextWindow: session.contextWindow,
-    });
+    if (sessionId) {
+      store.updateUsage(sessionId, {
+        model: session.model ?? null,
+        inputTokens: session.inputTokens ?? null,
+        outputTokens: session.outputTokens ?? null,
+        totalCostUsd: session.totalCostUsd ?? null,
+        contextWindow: session.contextWindow ?? null,
+      });
+    }
   }, [session?.status, session?.model, session?.inputTokens, session?.outputTokens, session?.totalCostUsd, session?.contextWindow]);
 
   const initialPromptWritten = useRef(false);
-
   useEffect(() => {
     if (initialPromptWritten.current) return;
     if (!location.state?.prompt || !sessionId) return;
@@ -99,16 +113,12 @@ export function SessionPage() {
 
   const sendMessage = useMutation({
     mutationFn: (text: string) => apiClient.sendMessage(sessionId!, text),
-    onSuccess: () => {
-      refetchSession();
-    },
+    onSuccess: () => refetchSession(),
   });
 
   const stopSession = useMutation({
     mutationFn: () => apiClient.stopSession(sessionId!),
-    onSuccess: () => {
-      refetchSession();
-    },
+    onSuccess: () => refetchSession(),
   });
 
   const renameSession = useMutation({
@@ -126,7 +136,7 @@ export function SessionPage() {
     mutationFn: ({ id, action }: { id: string; action: "rejected" | "dismissed" }) =>
       apiClient.respondApproval(id, action),
     onSuccess: () => {
-      void stopSession.mutate();
+      refetchSession();
     },
   });
 
@@ -140,6 +150,8 @@ export function SessionPage() {
         case "session.state.changed": {
           const payload = envelope.payload as { status: string };
           if (VALID_SESSION_STATUSES.has(payload.status)) {
+            const current = store.getStatus(sessionId);
+            if (TERMINAL_STATES.has(current)) break;
             store.setSessionStatus(sessionId, payload.status as SessionStatus);
           }
           break;
@@ -156,15 +168,35 @@ export function SessionPage() {
           });
           break;
         }
+        case "session.command.started": {
+          const p = envelope.payload as { toolUseId?: string; toolName?: string; input?: string };
+          if (p.toolUseId && p.toolName) {
+            store.addToolCall(sessionId, {
+              toolUseId: p.toolUseId,
+              toolName: p.toolName,
+              state: "running",
+              input: p.input,
+              timestamp: envelope.ts,
+            });
+          }
+          break;
+        }
+        case "session.command.completed": {
+          const p = envelope.payload as { toolUseId?: string; output?: string; isError?: boolean };
+          if (p.toolUseId) {
+            store.updateToolCall(sessionId, p.toolUseId, {
+              state: p.isError ? "error" : "completed",
+              output: p.output,
+            });
+          }
+          break;
+        }
         case "session.usage.updated": {
           const p = envelope.payload as {
-            model?: string;
-            inputTokens?: number;
-            outputTokens?: number;
-            costUsd?: number;
-            contextWindow?: number;
+            model?: string; inputTokens?: number; outputTokens?: number;
+            costUsd?: number; contextWindow?: number;
           };
-          store.updateUsage({
+          store.updateUsage(sessionId, {
             model: p.model ?? null,
             inputTokens: p.inputTokens ?? null,
             outputTokens: p.outputTokens ?? null,
@@ -175,11 +207,8 @@ export function SessionPage() {
         }
         case "session.approval.requested": {
           const p = envelope.payload as {
-            approvalId: string;
-            toolUseId: string;
-            toolName: string;
-            description: string;
-            payload: unknown;
+            approvalId: string; toolUseId: string; toolName: string;
+            description: string; payload: unknown;
           };
           store.addApproval({
             approvalId: p.approvalId,
@@ -221,7 +250,7 @@ export function SessionPage() {
     if (timelineRef.current) {
       timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
     }
-  }, [outputChunks]);
+  }, [outputChunks, pendingApprovals, toolCalls]);
 
   const handleSend = () => {
     const text = inputText.trim();
@@ -236,24 +265,42 @@ export function SessionPage() {
     setInputText("");
   };
 
-  const costDisplay =
-    totalCostUsd !== null
-      ? `$${parseFloat(totalCostUsd).toFixed(4)}`
-      : null;
-
   const canSend = sessionStatus === "running" || sessionStatus === "idle" || sessionStatus === "completed" || sessionStatus === "error";
 
+  const statusLabelMap: Record<string, string> = {
+    running: "运行中",
+    idle: "空闲",
+    waiting_approval: "待审批",
+    completed: "已完成",
+    stopped: "已停止",
+    error: "出错",
+  };
+
+  const statusVariantMap: Record<string, any> = {
+    running: "online",
+    idle: "idle",
+    waiting_approval: "warning",
+    completed: "info",
+    stopped: "neutral",
+    error: "error",
+  };
+
   return (
-    <section className="session-shell">
-      <header className="session-header">
-        <div>
-          <button type="button" className="btn-back" onClick={() => navigate(-1)}>
-            ← 返回
+    <section className="h-screen flex flex-col overflow-hidden bg-[var(--color-bg-base)]">
+      <header className="flex-shrink-0 flex items-center justify-between gap-3 px-4 h-12 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)]">
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="inline-flex items-center justify-center w-8 h-8 -ml-1 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-bg-surface-hover)] hover:text-[var(--color-text-primary)] transition-colors"
+          >
+            <ChevronLeftIcon />
           </button>
+
           {editingName ? (
-            <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 4 }}>
-              <input
-                type="text"
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              <Input
+                size="sm"
                 value={nameInput}
                 onChange={(e) => setNameInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -262,145 +309,226 @@ export function SessionPage() {
                   }
                   if (e.key === "Escape") setEditingName(false);
                 }}
-                placeholder="输入会话名称"
-                style={{ fontSize: 16, padding: "4px 8px", flex: 1 }}
+                placeholder="会话名称"
+                className="flex-1 text-sm"
                 autoFocus
               />
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => nameInput.trim() && renameSession.mutate(nameInput.trim())}
                 disabled={!nameInput.trim() || renameSession.isPending}
-                style={{ fontSize: 13, padding: "4px 10px" }}
               >
                 保存
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditingName(false)}
-                style={{ fontSize: 13, padding: "4px 10px" }}
-              >
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setEditingName(false)}>
                 取消
-              </button>
+              </Button>
             </div>
           ) : (
-            <h2 style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              {session?.name ?? "会话"}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h2 className="text-sm font-medium text-[var(--color-text-primary)] truncate">
+                {session?.name ?? "会话"}
+              </h2>
               <button
                 type="button"
-                className="btn-rename"
                 onClick={() => {
                   setNameInput(session?.name ?? "");
                   setEditingName(true);
                 }}
+                className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors opacity-50 hover:opacity-100"
               >
-                ✏️
-              </button>
-            </h2>
-          )}
-        </div>
-        <span className={`status-dot ${sessionStatus === "running" ? "online" : "offline"}`}>
-          {sessionStatus === "running"
-            ? "运行中"
-            : sessionStatus === "idle"
-              ? "空闲"
-              : sessionStatus === "waiting_approval"
-                ? "待审批"
-                : sessionStatus === "completed"
-                  ? "已完成"
-                  : sessionStatus === "stopped"
-                    ? "已停止"
-                    : sessionStatus === "error"
-                      ? "出错"
-                      : "—"}
-        </span>
-      </header>
-
-      <div className="metric-strip">
-        <span>{currentModel ?? "—"}</span>
-        {inputTokens !== null && outputTokens !== null && (
-          <>
-            <span>Token: {inputTokens + outputTokens}</span>
-          </>
-        )}
-        {costDisplay && <span>Cost: {costDisplay}</span>}
-        {contextWindow && <span>Context: {contextWindow}</span>}
-      </div>
-
-      <div className="timeline" ref={timelineRef}>
-        {outputChunks.length === 0 && (
-          <div className="empty-timeline">
-            {sessionStatus === "running"
-              ? "等待输出..."
-              : sessionStatus === "idle" || sessionStatus === "completed"
-                ? "会话已结束"
-                : sessionStatus === "error"
-                  ? "会话出错"
-                  : "等待输出..."}
-          </div>
-        )}
-        {outputChunks.map((chunk, i) => (
-          <div
-            key={`${chunk.eventId}-${i}`}
-            className={`bubble ${chunk.kind === "thinking" ? "bubble--thinking" : ""} ${chunk.kind === "user" ? "bubble--user" : ""}`}
-          >
-            {chunk.kind === "user" ? chunk.text : (
-              <Markdown remarkPlugins={[remarkGfm]}>{chunk.text}</Markdown>
-            )}
-          </div>
-        ))}
-
-        {pendingApprovals.map((a) => (
-          <div key={a.approvalId} className="approval-card">
-            <strong>⚠ 审批请求</strong>
-            <p className="approval-tool">{a.toolName}</p>
-            <p className="approval-desc">{a.description}</p>
-            <div className="actions">
-              <button
-                type="button"
-                className="btn-danger"
-                onClick={() =>
-                  respondApproval.mutate({ id: a.approvalId, action: "rejected" })
-                }
-                disabled={respondApproval.isPending}
-              >
-                停止 session
+                <EditIcon />
               </button>
             </div>
-          </div>
-        ))}
+          )}
+        </div>
+
+        <StatusDot
+          variant={statusVariantMap[sessionStatus] ?? "neutral"}
+          label={statusLabelMap[sessionStatus] ?? "—"}
+          size="sm"
+          pulse={sessionStatus === "running"}
+        />
+      </header>
+
+      <RuntimeBar
+        model={currentModel}
+        inputTokens={inputTokens}
+        outputTokens={outputTokens}
+        costUsd={totalCostUsd}
+        contextWindow={contextWindow}
+        state={sessionStatus as any}
+      />
+
+      <div className="flex-1 overflow-y-auto px-4 py-3" ref={timelineRef}>
+        {outputChunks.length === 0 && pendingApprovals.length === 0 && toolCalls.length === 0 && (
+          <EmptyState
+            title={
+              sessionStatus === "running"
+                ? "等待输出..."
+                : sessionStatus === "idle" || sessionStatus === "completed"
+                ? "会话已就绪"
+                : sessionStatus === "error"
+                ? "会话出错"
+                : "等待输出..."
+            }
+            description="Claude 的输出将在这里实时显示"
+          />
+        )}
+
+        {renderTimeline(outputChunks, toolCalls, pendingApprovals, respondApproval, stopSession)}
       </div>
 
-      <footer className="composer">
-        <input
-          type="text"
-          placeholder={
-            sessionStatus === "running"
-              ? "Claude 正在思考..."
-              : "输入消息发送给 Claude..."
-          }
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          disabled={!canSend}
-        />
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={!inputText.trim() || !canSend}
-        >
-          发送
-        </button>
-        {sessionStatus === "running" && (
-          <button
-            type="button"
-            className="btn-danger"
-            onClick={() => stopSession.mutate()}
-            disabled={stopSession.isPending}
+      <footer className="flex-shrink-0 border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)]/90 backdrop-blur-md px-4 py-3 safe-bottom">
+        <div className="flex items-center gap-2">
+          <Input
+            type="text"
+            placeholder={
+              sessionStatus === "running"
+                ? "Claude 正在思考..."
+                : "输入消息发送给 Claude"
+            }
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            disabled={!canSend}
+            className="flex-1"
+          />
+          <Button
+            variant="primary"
+            size="md"
+            onClick={handleSend}
+            disabled={!inputText.trim() || !canSend}
           >
-            停止
-          </button>
-        )}
+            发送
+          </Button>
+          {sessionStatus === "running" && (
+            <Button
+              variant="danger"
+              size="md"
+              onClick={() => stopSession.mutate()}
+              disabled={stopSession.isPending}
+            >
+              停止
+            </Button>
+          )}
+        </div>
       </footer>
     </section>
+  );
+}
+
+type RespondApprovalFn = {
+  mutate: (vars: { id: string; action: "rejected" | "dismissed" }) => void;
+  isPending: boolean;
+};
+type StopSessionFn = {
+  mutate: () => void;
+  isPending: boolean;
+};
+
+function renderTimeline(
+  chunks: OutputChunk[],
+  toolCalls: any[],
+  approvals: any[],
+  respondApproval: RespondApprovalFn,
+  stopSession: StopSessionFn,
+) {
+  const items: Array<{ type: "chunk" | "tool" | "approval"; ts: string; data: any }> = [];
+
+  for (const c of chunks) {
+    items.push({ type: "chunk", ts: c.timestamp, data: c });
+  }
+  for (const t of toolCalls) {
+    items.push({ type: "tool", ts: t.timestamp, data: t });
+  }
+  for (const a of approvals) {
+    items.push({ type: "approval", ts: new Date().toISOString(), data: a });
+  }
+
+  items.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+
+  return items.map((item, i) => {
+    if (item.type === "chunk") {
+      const chunk = item.data as OutputChunk;
+      if (chunk.kind === "user") {
+        return (
+          <TimelineItem key={`${chunk.eventId}-${i}`} kind="user">
+            <p className="text-sm text-[var(--color-text-primary)] leading-relaxed">{chunk.text}</p>
+          </TimelineItem>
+        );
+      }
+      if (chunk.kind === "thinking") {
+        return (
+          <TimelineItem key={`${chunk.eventId}-${i}`} kind="thinking">
+            <details className="text-xs">
+              <summary className="cursor-pointer text-[var(--color-text-tertiary)] select-none">
+                Thinking...
+              </summary>
+              <p className="mt-1 pl-2 border-l-2 border-[var(--color-border-default)] text-[var(--color-text-muted)]">
+                {chunk.text}
+              </p>
+            </details>
+          </TimelineItem>
+        );
+      }
+      return (
+        <TimelineItem key={`${chunk.eventId}-${i}`} kind="agent">
+          <div className="text-sm text-[var(--color-text-primary)] leading-relaxed prose prose-sm max-w-none">
+            <Markdown remarkPlugins={[remarkGfm]}>{chunk.text}</Markdown>
+          </div>
+        </TimelineItem>
+      );
+    }
+
+    if (item.type === "tool") {
+      const tc = item.data;
+      return (
+        <TimelineItem key={`tool-${tc.toolUseId}-${i}`} kind="tool">
+          <ToolCallCard
+            toolName={tc.toolName}
+            state={tc.state}
+            input={tc.input}
+            output={tc.output}
+          />
+        </TimelineItem>
+      );
+    }
+
+    if (item.type === "approval") {
+      const a = item.data;
+      return (
+        <TimelineItem key={`approval-${a.approvalId}-${i}`} kind="system">
+          <ApprovalCard
+            toolName={a.toolName}
+            description={a.description}
+            commandPreview={typeof a.payload === "string" ? a.payload : JSON.stringify(a.payload, null, 2)}
+            riskLevel="high"
+            onStop={() => stopSession.mutate()}
+            isLoading={stopSession.isPending}
+          />
+        </TimelineItem>
+      );
+    }
+
+    return null;
+  });
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
+function EditIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
   );
 }

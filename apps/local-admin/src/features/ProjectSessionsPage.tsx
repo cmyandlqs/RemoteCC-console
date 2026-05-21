@@ -1,58 +1,122 @@
 import { useParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../lib/api";
+import {
+  Card,
+  Button,
+  StatusBadge,
+  SectionHeader,
+  EmptyState,
+  LoadingState,
+  ErrorState,
+} from "@agent-console/shared-ui";
 
 export function ProjectSessionsPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const qc = useQueryClient();
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["project-sessions", projectId],
     queryFn: () => apiClient.listSessions(projectId!),
     enabled: !!projectId,
   });
 
+  const stopSession = useMutation({
+    mutationFn: (sid: string) => apiClient.stopSession(sid),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["project-sessions", projectId] }),
+  });
+
+  const sessions = data?.data ?? [];
+
+  const statusVariantMap: Record<string, string> = {
+    running: "online",
+    idle: "idle",
+    waiting_approval: "warning",
+    error: "error",
+    completed: "info",
+    stopped: "neutral",
+    disconnected: "neutral",
+  };
+
+  const statusLabelMap: Record<string, string> = {
+    running: "运行中",
+    idle: "空闲",
+    waiting_approval: "待审批",
+    error: "错误",
+    completed: "已完成",
+    stopped: "已停止",
+    disconnected: "离线",
+  };
+
   return (
-    <section className="panel">
-      <div className="section-header">
-        <div>
-          <Link to="/projects" className="back-link">← 返回项目</Link>
-          <h2>项目会话</h2>
-        </div>
+    <div className="max-w-3xl">
+      <div className="mb-5">
+        <Link to="/projects" className="back-link">
+          <ChevronLeftIcon />
+          返回项目
+        </Link>
+        <h1 className="text-xl font-semibold text-[var(--color-text-primary)] tracking-tight mt-2">
+          项目会话
+        </h1>
       </div>
 
-      {isLoading && <p className="loading-hint">加载中...</p>}
-      {error && <p className="error-hint">加载失败：{String(error)}</p>}
+      {isLoading && <LoadingState rows={3} />}
+      {error && <ErrorState message={String(error)} retry={() => void refetch()} />}
 
-      {data?.data?.length === 0 && (
-        <p className="empty-hint">暂无会话</p>
+      {!isLoading && !error && sessions.length === 0 && (
+        <EmptyState title="暂无会话" description="此项目下没有活跃或历史会话" />
       )}
 
-      <div className="stack">
-        {data?.data?.map((session) => (
-          <div key={session.id} className="row-card">
-            <div>
-              <strong>{session.name ?? "未命名会话"}</strong>
-              <p className="project-meta">
-                状态：{session.status} · 模型：{session.model ?? "—"}
+      <div className="space-y-2">
+        {sessions.map((session) => (
+          <Card
+            key={session.id}
+            padding="md"
+            hover
+            className="flex items-start justify-between gap-4"
+          >
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm font-medium text-[var(--color-text-primary)]">
+                  {session.name ?? "未命名会话"}
+                </span>
+                <StatusBadge variant={statusVariantMap[session.status] as any ?? "neutral"}>
+                  {statusLabelMap[session.status] ?? session.status}
+                </StatusBadge>
+              </div>
+              <p className="text-xs text-[var(--color-text-tertiary)]">
+                {session.model ?? "—"}
+                {session.lastActiveAt && (
+                  <span className="ml-2">· {new Date(session.lastActiveAt).toLocaleString()}</span>
+                )}
               </p>
               {session.lastError && (
-                <p className="error-hint">错误：{session.lastError}</p>
+                <p className="mt-1 text-xs text-[var(--color-status-error)]">
+                  {session.lastError}
+                </p>
               )}
             </div>
-            <div className="actions">
-              {session.status === "running" && (
-                <button
-                  type="button"
-                  className="btn-danger"
-                  onClick={() => apiClient.stopSession(session.id)}
-                >
-                  停止
-                </button>
-              )}
-            </div>
-          </div>
+            {session.status === "running" && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => stopSession.mutate(session.id)}
+                disabled={stopSession.isPending}
+              >
+                停止
+              </Button>
+            )}
+          </Card>
         ))}
       </div>
-    </section>
+    </div>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
   );
 }

@@ -1,0 +1,142 @@
+@layer base {
+  :root {
+    /* ─────────────────────────────
+       Color System
+       ───────────────────────────── */
+
+    /* Backgrounds */
+    --color-bg-base: #faf8f5;
+    --color-bg-surface: #ffffff;
+    --color-bg-surface-alt: #f7f5f2;
+    --color-bg-surface-hover: #f0eeeb;
+    --color-bg-inset: #f2f0ed;
+    --color-bg-code: #f5f3f0;
+
+    /* Borders */
+    --color-border-subtle: #f0eeeb;
+    --color-border-default: #e8e5e0;
+    --color-border-strong: #d5d1ca;
+    --color-border-input: #ddd9d3;
+    --color-border-focus: #c8c3bb;
+
+    /* Text */
+    --color-text-primary: #1a1917;
+    --color-text-secondary: #6b6660;
+    --color-text-tertiary: #9c9790;
+    --color-text-muted: #b5b0a8;
+    --color-text-on-accent: #ffffff;
+    --color-text-inverse: #f0eeeb;
+
+    /* Accent (warm amber) */
+    --color-accent: #8b7355;
+    --color-accent-subtle: #faf5ee;
+    --color-accent-hover: #7a6549;
+    --color-accent-active: #69573e;
+
+    /* Status colors - muted, sophisticated */
+    --color-status-online: #2d7a3a;
+    --color-status-online-bg: #eef7f0;
+    --color-status-online-border: #c5e5cc;
+
+    --color-status-warning: #9a6d18;
+    --color-status-warning-bg: #fdf7ed;
+    --color-status-warning-border: #f0dfc0;
+
+    --color-status-error: #c0392b;
+    --color-status-error-bg: #fdf1ef;
+    --color-status-error-border: #f0c8c4;
+
+    --color-status-info: #2f5f8f;
+    --color-status-info-bg: #edf4fa;
+    --color-status-info-border: #c8ddec;
+
+    --color-status-idle: #8a8580;
+    --color-status-idle-bg: #f5f4f2;
+    --color-status-idle-border: #ddd9d3;
+
+    /* ─────────────────────────────
+       Spacing System (4px base)
+       ───────────────────────────── */
+    --space-0\.5: 2px;
+    --space-1: 4px;
+    --space-1\.5: 6px;
+    --space-2: 8px;
+    --space-2\.5: 10px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+
+    /* ─────────────────────────────
+       Border Radius System
+       ───────────────────────────── */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+    --radius-2xl: 16px;
+    --radius-full: 9999px;
+
+    /* ─────────────────────────────
+       Shadow System (extremely subtle)
+       ───────────────────────────── */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.02);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.04), 0 4px 6px rgba(0, 0, 0, 0.02);
+
+    /* ─────────────────────────────
+       Typography Scale
+       ───────────────────────────── */
+    --text-xs: 0.75rem;      /* 12px */
+    --text-sm: 0.8125rem;    /* 13px */
+    --text-base: 0.875rem;   /* 14px */
+    --text-md: 0.9375rem;    /* 15px */
+    --text-lg: 1rem;         /* 16px */
+    --text-xl: 1.125rem;     /* 18px */
+    --text-2xl: 1.375rem;    /* 22px */
+    --text-3xl: 1.75rem;     /* 28px */
+
+    --leading-tight: 1.25;
+    --leading-snug: 1.375;
+    --leading-normal: 1.5;
+    --leading-relaxed: 1.625;
+
+    /* ─────────────────────────────
+       Motion / Easing
+       ───────────────────────────── */
+    --duration-instant: 80ms;
+    --duration-fast: 120ms;
+    --duration-normal: 200ms;
+    --duration-slow: 300ms;
+    --duration-slower: 500ms;
+
+    --ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* ─────────────────────────────
+       Z-Index Scale
+       ───────────────────────────── */
+    --z-base: 0;
+    --z-dropdown: 10;
+    --z-sticky: 20;
+    --z-fixed: 30;
+    --z-modal-backdrop: 40;
+    --z-modal: 50;
+    --z-toast: 60;
+
+    /* ─────────────────────────────
+       Layout Tokens
+       ───────────────────────────── */
+    --sidebar-width: 200px;
+    --sidebar-collapsed: 64px;
+    --header-height: 48px;
+    --bottom-nav-height: 56px;
+    --max-content-width: 1200px;
+  }
+}

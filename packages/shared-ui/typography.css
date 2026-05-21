@@ -1,0 +1,71 @@
+@layer base {
+  /* ─────────────────────────────
+     Typography System
+     ───────────────────────────── */
+
+  :root {
+    /* Font stacks */
+    --font-sans: "Inter", "SF Pro Display", "SF Pro Text", -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", "Fira Mono", "Cascadia Code", "Noto Sans Mono", ui-monospace, monospace;
+  }
+
+  /* Number alignment for monospace contexts */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1, "zero" 1;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Selection styling */
+  ::selection {
+    background: var(--color-accent-subtle);
+    color: var(--color-text-primary);
+  }
+
+  /* Scrollbar styling (Webkit) */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+    border-radius: var(--radius-full);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-tertiary);
+  }
+
+  /* Code block typography */
+  code, pre {
+    font-family: var(--font-mono);
+  }
+
+  pre {
+    white-space: pre;
+    word-wrap: normal;
+    overflow-x: auto;
+  }
+
+  pre code {
+    white-space: inherit;
+  }
+
+  /* Inline code */
+  :not(pre) > code {
+    background: var(--color-bg-code);
+    padding: 1.5px 4px;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    line-height: var(--leading-tight);
+  }
+}

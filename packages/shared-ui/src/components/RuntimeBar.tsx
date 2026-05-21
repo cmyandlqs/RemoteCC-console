@@ -13,12 +13,12 @@ type Props = {
 };
 
 const stateLabels: Record<RuntimeState, string> = {
-  idle: "Idle",
-  running: "Running",
-  waiting_approval: "Waiting",
-  error: "Error",
-  completed: "Completed",
-  stopped: "Stopped",
+  idle: "空闲",
+  running: "运行中",
+  waiting_approval: "待审批",
+  error: "错误",
+  completed: "已完成",
+  stopped: "已停止",
 };
 
 export function RuntimeBar({
@@ -70,7 +70,7 @@ export function RuntimeBar({
       {/* Tokens */}
       {totalTokens != null && (
         <span className="text-xs font-mono text-[var(--color-text-tertiary)]">
-          {totalTokens.toLocaleString()} tok
+          {totalTokens.toLocaleString()} tokens
         </span>
       )}
 
@@ -84,7 +84,7 @@ export function RuntimeBar({
       {/* Context */}
       {contextWindow != null && (
         <span className="text-xs font-mono text-[var(--color-text-tertiary)]">
-          ctx {contextWindow.toLocaleString()}
+          context {contextWindow.toLocaleString()}
         </span>
       )}
     </div>

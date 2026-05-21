@@ -5,9 +5,7 @@ import { apiClient } from "../lib/api.js";
 import {
   Card,
   Button,
-  Input,
   StatusBadge,
-  SectionHeader,
   EmptyState,
   LoadingState,
   ErrorState,
@@ -25,7 +23,7 @@ export function ProjectsPage() {
     enabled: !!projectId,
   });
 
-  const { data: sessionsData, isLoading: loadingSessions, refetch: refetchSessions } = useQuery({
+  const { data: sessionsData, isLoading: loadingSessions } = useQuery({
     queryKey: ["sessions", projectId],
     queryFn: () => apiClient.listSessions(projectId!),
     enabled: !!projectId,
@@ -72,58 +70,70 @@ export function ProjectsPage() {
   };
 
   return (
-    <section className="px-4 pt-4 pb-2">
-      {/* Project header */}
-      <div className="mb-5">
-        <div className="flex items-center gap-2 mb-1">
+    <section className="px-4 pt-5 pb-2">
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-1.5">
           <Link to="/" className="text-[var(--color-text-tertiary)]">
             <ChevronLeftIcon />
           </Link>
-          <h1 className="text-lg font-semibold text-[var(--color-text-primary)] tracking-tight">
+          <h1 className="text-xl font-semibold text-[var(--color-text-primary)] tracking-tight">
             {project.name}
           </h1>
         </div>
-        <p className="text-xs text-[var(--color-text-muted)] font-mono truncate ml-6">
-          {project.rootPath}
-        </p>
-        {project.gitBranch && (
-          <div className="flex items-center gap-2 mt-1.5 ml-6">
-            <span className="text-[11px] font-mono text-[var(--color-text-tertiary)] bg-[var(--color-bg-inset)] px-1.5 py-0.5 rounded">
-              {project.gitBranch}
-            </span>
-            <span className="text-xs text-[var(--color-text-muted)]">
-              {project.uncommittedChanges > 0
-                ? `${project.uncommittedChanges} 个未提交`
-                : "工作区干净"}
-            </span>
-          </div>
-        )}
+        <div className="ml-7">
+          <p className="text-xs text-[var(--color-text-muted)] font-mono truncate">
+            {project.rootPath}
+          </p>
+          {project.gitBranch && (
+            <div className="flex items-center gap-2 mt-1.5">
+              <span className="text-[11px] font-mono text-[var(--color-text-tertiary)] bg-[var(--color-bg-inset)] px-1.5 py-0.5 rounded">
+                {project.gitBranch}
+              </span>
+              <span className="text-xs text-[var(--color-text-muted)]">
+                {project.uncommittedChanges > 0
+                  ? `${project.uncommittedChanges} 个未提交`
+                  : "工作区干净"}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* New session composer */}
-      <Card padding="md" className="mb-5">
-        <p className="text-xs text-[var(--color-text-muted)] mb-2">输入任务，启动 Claude Code</p>
-        <div className="flex gap-2">
-          <Input
-            type="text"
-            placeholder="例如：修复登录页面的响应式布局"
-            value={promptInput}
-            onChange={(e) => setPromptInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && promptInput.trim()) {
-                createSession.mutate(promptInput.trim());
-              }
-            }}
-            disabled={createSession.isPending}
-            className="flex-1"
-          />
+      <Card padding="lg" className="mb-6 border-[var(--color-accent)]/20">
+        <div className="flex items-center gap-2 mb-3">
+          <SparkleIcon />
+          <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">新建会话</h3>
+        </div>
+        <textarea
+          placeholder="描述你想让 Claude Code 做什么..."
+          value={promptInput}
+          onChange={(e) => setPromptInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && promptInput.trim()) {
+              e.preventDefault();
+              createSession.mutate(promptInput.trim());
+            }
+          }}
+          disabled={createSession.isPending}
+          rows={3}
+          className={[
+            "w-full resize-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]",
+            "px-3 py-2.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]",
+            "focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30 focus:border-[var(--color-accent)]",
+            "transition-colors duration-[var(--duration-fast)]",
+          ].join(" ")}
+        />
+        <div className="flex items-center justify-between mt-3">
+          <span className="text-[11px] text-[var(--color-text-muted)]">
+            Enter 发送 · Shift+Enter 换行
+          </span>
           <Button
             variant="primary"
             size="md"
             disabled={createSession.isPending || !promptInput.trim()}
             onClick={() => promptInput.trim() && createSession.mutate(promptInput.trim())}
           >
-            {createSession.isPending ? "..." : "启动"}
+            {createSession.isPending ? "启动中..." : "启动会话"}
           </Button>
         </div>
         {createSession.error && (
@@ -133,12 +143,14 @@ export function ProjectsPage() {
         )}
       </Card>
 
-      {/* Session list */}
-      <SectionHeader
-        title="会话历史"
-        description={`${sessions.length} 个会话`}
-        className="!mb-3"
-      />
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-base font-semibold text-[var(--color-text-primary)] tracking-tight">
+          会话历史
+        </h2>
+        <span className="text-xs text-[var(--color-text-tertiary)]">
+          {sessions.length} 个会话
+        </span>
+      </div>
 
       {loadingSessions && <LoadingState rows={3} />}
 
@@ -146,35 +158,61 @@ export function ProjectsPage() {
         <EmptyState title="暂无会话" description="创建新会话以开始" />
       )}
 
-      <div className="space-y-2">
-        {sessions.map((session) => (
-          <Link key={session.id} to={`/sessions/${session.id}`}>
-            <Card padding="md" hover className="flex items-center justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium text-[var(--color-text-primary)] truncate">
-                    {session.name ?? "未命名会话"}
-                  </span>
-                  <StatusBadge variant={statusVariantMap[session.status] as any ?? "neutral"}>
-                    {statusLabelMap[session.status] ?? session.status}
-                  </StatusBadge>
+      <div className="space-y-3">
+        {sessions.map((session) => {
+          const isActive = session.status === "running" || session.status === "waiting_approval";
+          return (
+            <Link key={session.id} to={`/sessions/${session.id}`}>
+              <Card
+                padding="md"
+                hover
+                className={[
+                  "flex items-center justify-between gap-3",
+                  isActive ? "border-l-2 border-l-[var(--color-status-online)]" : "",
+                  session.status === "error" ? "border-l-2 border-l-[var(--color-status-error)]" : "",
+                ].join(" ")}
+              >
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <div className="flex-shrink-0 mt-0.5 text-[var(--color-text-muted)]">
+                    <TerminalIcon />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[15px] font-medium text-[var(--color-text-primary)] truncate">
+                        {session.name ?? "未命名会话"}
+                      </span>
+                      <StatusBadge variant={statusVariantMap[session.status] as any ?? "neutral"}>
+                        {statusLabelMap[session.status] ?? session.status}
+                      </StatusBadge>
+                    </div>
+                    <p className="text-xs text-[var(--color-text-muted)]">
+                      {session.model ?? "—"}
+                      {session.lastActiveAt && (
+                        <span className="ml-2">
+                          {formatRelativeTime(session.lastActiveAt)}
+                        </span>
+                      )}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-xs text-[var(--color-text-muted)]">
-                  {session.model ?? "—"}
-                  {session.lastActiveAt && (
-                    <span className="ml-2">
-                      {Math.round((Date.now() - new Date(session.lastActiveAt).getTime()) / 60000)} 分钟前
-                    </span>
-                  )}
-                </p>
-              </div>
-              <ChevronRightIcon />
-            </Card>
-          </Link>
-        ))}
+                <ChevronRightIcon />
+              </Card>
+            </Link>
+          );
+        })}
       </div>
     </section>
   );
+}
+
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(diff / 60000);
+  if (mins < 1) return "刚刚";
+  if (mins < 60) return `${mins} 分钟前`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  return `${Math.round(hours / 24)} 天前`;
 }
 
 function ChevronLeftIcon() {
@@ -189,6 +227,23 @@ function ChevronRightIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-text-muted)] flex-shrink-0">
       <path d="M9 18l6-6-6-6" />
+    </svg>
+  );
+}
+
+function TerminalIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="4 17 10 11 4 5" />
+      <line x1="12" y1="19" x2="20" y2="19" />
+    </svg>
+  );
+}
+
+function SparkleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-accent)]">
+      <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z" />
     </svg>
   );
 }

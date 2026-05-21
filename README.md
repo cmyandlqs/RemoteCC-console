@@ -5,6 +5,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
 [![Fastify](https://img.shields.io/badge/Fastify-5.0-purple.svg)](https://fastify.dev/)
 [![React](https://img.shields.io/badge/React-18-61dafb.svg)](https://react.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-38bdf8.svg)](https://tailwindcss.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 [English](./README-en.md) · [中文文档](./doc/)
@@ -13,13 +14,16 @@
 
 - **流式对话** — 通过 WebSocket 接收 Claude Code 的实时流式输出（逐 token），支持连续对话
 - **会话管理** — 创建、恢复、停止、重命名 Claude Code 会话
+- **Tool Call 可视化** — 折叠式工具调用卡片，展示命令、输入参数、执行状态和输出
 - **消息持久化** — 所有对话（用户消息 + Claude 回复 + thinking）存入 SQLite，刷新不丢失
 - **Markdown 渲染** — Claude 回复支持加粗、列表、代码块、引用等 Markdown 语法
-- **实时监控** — Token 消耗、模型信息、上下文窗口实时显示
-- **审批感知** — 接收危险命令审批卡片，支持紧急停止
-- **多项目支持** — 项目白名单、路径隔离
+- **实时监控** — RuntimeBar 显示运行状态、模型、Token 消耗、费用、Context Window
+- **审批感知** — 接收危险命令审批卡片（风险等级 + 命令预览），支持紧急停止
+- **审批中心** — 独立的待审批列表页面，集中管理所有审批请求
+- **多项目支持** — 项目白名单、路径隔离、Git 分支/未提交变更可视化
 - **移动端 PWA** — 可安装的渐进式 Web 应用
 - **Tailscale 内网** — 零配置内网远程访问
+- **统一设计系统** — CSS 变量驱动的 token 体系 + 17 个共享 UI 组件
 
 ## 快速开始
 
@@ -56,7 +60,7 @@ npm run dev:mobile-web
 
 | 环境变量 | 默认值 | 说明 |
 |----------|--------|------|
-| `AGENT_CONSOLE_HOST` | `127.0.0.1` | 监听地址 |
+| `AGENT_CONSOLE_HOST` | `0.0.0.0` | 监听地址 |
 | `AGENT_CONSOLE_PORT` | `8787` | 监听端口 |
 | `VITE_DAEMON_URL` | `http://localhost:8787` | 前端连接地址 |
 | `VITE_DAEMON_WS_URL` | `ws://localhost:8787` | WebSocket 地址 |
@@ -64,32 +68,35 @@ npm run dev:mobile-web
 ## 系统架构
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Mobile Web / PWA (4174)                               │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │ HostsPage · ProjectsPage · SessionPage          │   │
-│  │ Zustand (per-session) + React Query + WebSocket │   │
-│  └──────────────────────────────────────────────────┘   │
-└────────────────────┬──────────────────────────────────┘
-                     │ REST API / WebSocket
-┌────────────────────▼──────────────────────────────────┐
-│  Daemon (8787) — Fastify 5                             │
-│  ┌────────────┬────────────┬────────────┬────────────┐ │
-│  │ Auth       │ Session    │ Approval   │ Git       │ │
-│  │ Service    │ Supervisor │ Service    │ Service   │ │
-│  └────────────┴────────────┴────────────┴────────────┘ │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │ CliClaudeAdapter                                 │  │
-│  │ claude -p --output-format stream-json             │  │
-│  │ --include-partial-messages --permission-mode      │  │
-│  │ dontAsk                                          │  │
-│  └──────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │ SQLite (Drizzle ORM)                             │  │
-│  │ projects · sessions · session_messages           │  │
-│  │ approval_requests · file_changes · device_bindings│  │
-│  └──────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  Local Admin (4173)              Mobile Web / PWA (4174)    │
+│  ┌────────────────────────────┐  ┌────────────────────────┐ │
+│  │ Overview · Projects        │  │ Hosts · Projects       │ │
+│  │ Sessions · Approvals       │  │ Session · Approvals    │ │
+│  │ Pairing                    │  │                        │ │
+│  └──────────┬─────────────────┘  └──────────┬─────────────┘ │
+│             │  @agent-console/shared-ui       │               │
+│             │  (tokens.css + 17 components)   │               │
+│             │  Tailwind CSS v4                │               │
+└─────────────┼────────────────────────────────┼───────────────┘
+              │ REST API / WebSocket           │
+┌─────────────▼────────────────────────────────▼───────────────┐
+│  Daemon (8787) — Fastify 5                                   │
+│  ┌────────────┬────────────┬────────────┬────────────────┐   │
+│  │ Auth       │ Session    │ Approval   │ Git            │   │
+│  │ Service    │ Supervisor │ Service    │ Service        │   │
+│  └────────────┴────────────┴────────────┴────────────────┘   │
+│  ┌────────────────────────────────────────────────────────┐   │
+│  │ CliClaudeAdapter                                       │   │
+│  │ claude -p --output-format stream-json                  │   │
+│  │ --include-partial-messages --permission-mode dontAsk   │   │
+│  └────────────────────────────────────────────────────────┘   │
+│  ┌────────────────────────────────────────────────────────┐   │
+│  │ SQLite (Drizzle ORM)                                   │   │
+│  │ projects · sessions · session_messages                 │   │
+│  │ approval_requests · file_changes · device_bindings     │   │
+│  └────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ## 技术栈
@@ -100,10 +107,12 @@ npm run dev:mobile-web
 | 数据库 | SQLite + Drizzle ORM + better-sqlite3 |
 | Claude 集成 | `claude -p --include-partial-messages --output-format stream-json` CLI 适配层 |
 | 前端框架 | React 18 + Vite |
+| 样式 | Tailwind CSS v4 + CSS 变量 Design Tokens |
 | 状态管理 | Zustand (per-session 隔离) + TanStack React Query |
 | Markdown | react-markdown + remark-gfm |
+| 共享组件 | @agent-console/shared-ui (17 个组件 + tokens.css) |
 | 移动端 | PWA (vite-plugin-pwa) |
-| 类型 | TypeScript strict mode |
+| 类型 | TypeScript strict + exactOptionalPropertyTypes |
 
 ## 项目结构
 
@@ -121,17 +130,53 @@ apps/
 │   └── routes/          # REST API + WebSocket
 │
 ├── local-admin/         # 主机管理页 (4173)
-│   └── features/        # OverviewPage · ProjectsPage · PairingPage
+│   └── features/        # OverviewPage · ProjectsPage · ProjectSessionsPage
+│                        # ApprovalsPage · PairingPage
 │
 └── mobile-web/          # 移动端 Web/PWA (4174)
-    ├── features/        # HostsPage · ProjectsPage · SessionPage
-    ├── stores/          # Zustand (per-session 隔离 store)
+    ├── features/        # HostsPage · ProjectsPage · SessionPage · ApprovalsPage
+    ├── stores/          # Zustand (per-session 隔离 store + tool call 追踪)
     └── lib/             # API client + WebSocket client
 
 packages/
 ├── claude-adapter/      # Claude CLI 适配层（stream_event 解析）
-└── shared-types/        # 共享 TypeScript 类型 + WS 协议定义
+├── shared-types/        # 共享 TypeScript 类型 + WS 协议定义
+└── shared-ui/           # 共享 UI 组件库
+    ├── tokens.css       # Design tokens (50+ CSS 变量: 配色/间距/圆角/阴影/动效)
+    ├── reset.css        # CSS reset
+    ├── typography.css   # 排版样式
+    └── src/components/  # 17 个组件
+        ├── Button · IconButton · Input · Card
+        ├── StatusDot · StatusBadge
+        ├── EmptyState · LoadingState · ErrorState
+        ├── SectionHeader · MetricRow · MetricGrid
+        ├── ToolCallCard · ApprovalCard · ShellOutput
+        ├── TimelineItem · RuntimeBar
+        └── index.ts
 ```
+
+## 共享 UI 组件
+
+`@agent-console/shared-ui` 提供统一的设计语言和可复用组件：
+
+| 组件 | 用途 |
+|------|------|
+| `Button` | 4 种变体: primary / secondary / ghost / danger |
+| `Card` | 通用卡片容器，支持 hover / keyboard 可访问 |
+| `Input` | 表单输入框 |
+| `IconButton` | 纯图标按钮（无文字） |
+| `StatusDot` | 状态指示圆点 (online / idle / warning / error) |
+| `StatusBadge` | 状态标签徽章 |
+| `TimelineItem` | 会话 Timeline 项 (user / agent / thinking / tool / system) |
+| `ToolCallCard` | 可折叠工具调用卡片（4 种执行状态动画） |
+| `ApprovalCard` | 审批卡片（风险等级 + 命令预览 + 紧急停止） |
+| `ShellOutput` | 终端输出展示（可折叠） |
+| `RuntimeBar` | 运行时状态栏（状态/模型/Token/费用/Context） |
+| `MetricRow` / `MetricGrid` | 数据指标展示 |
+| `SectionHeader` | 区域标题 |
+| `EmptyState` / `LoadingState` / `ErrorState` | 空状态/加载/错误占位 |
+
+Design tokens 定义在 `packages/shared-ui/tokens.css`，包含配色（中性暖灰白 `#faf8f5` 底色）、间距、圆角、阴影、动效等 50+ CSS 变量。
 
 ## 核心数据流
 
@@ -144,6 +189,18 @@ packages/
         → stream_event (content_block_delta)
         → EventBus → WS Gateway → 手机端渲染
         → 同时写入 session_messages 表
+```
+
+### 会话 Timeline
+
+```
+WS 事件 → session-store (Zustand per-session)
+       → TimelineItem 渲染
+         kind=user     → accent 色背景，右对齐
+         kind=agent    → surface 容器 + subtle border，左对齐
+         kind=thinking → 斜体 tertiary 文字
+         kind=tool     → ToolCallCard (可折叠 input/output + 执行状态)
+         kind=system   → 居中 muted 文字
 ```
 
 ### 历史消息加载

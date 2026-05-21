@@ -2,7 +2,7 @@ import { eq, and, gt } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 
 import type { AppDatabase } from "../../infra/database.js";
-import { sessions, sessionMessages } from "../../infra/schema.js";
+import { sessions, sessionMessages, sessionEvents, approvalRequests, fileChanges } from "../../infra/schema.js";
 
 export type SessionStatus =
   | "idle"
@@ -184,6 +184,10 @@ export class SessionService {
       throw new SessionServiceError("会话不存在。", "SESSION_NOT_FOUND");
     }
 
+    await this.db.delete(sessionMessages).where(eq(sessionMessages.sessionId, sessionId));
+    await this.db.delete(approvalRequests).where(eq(approvalRequests.sessionId, sessionId));
+    await this.db.delete(fileChanges).where(eq(fileChanges.sessionId, sessionId));
+    await this.db.delete(sessionEvents).where(eq(sessionEvents.sessionId, sessionId));
     await this.db.delete(sessions).where(eq(sessions.id, sessionId));
   }
 

@@ -18,11 +18,12 @@
 - **消息持久化** — 所有对话（用户消息 + Claude 回复 + thinking）存入 SQLite，刷新不丢失
 - **Markdown 渲染** — Claude 回复支持加粗、列表、代码块、引用等 Markdown 语法
 - **实时监控** — RuntimeBar 显示运行状态、模型、Token 消耗、费用、Context Window
+- **延迟检测** — 自动测量网络延迟，首页 badge 显示健康状态（<150ms 良好 / 150-400ms 一般 / >400ms 较差）
 - **审批感知** — 接收危险命令审批卡片（风险等级 + 命令预览），支持紧急停止
 - **审批中心** — 独立的待审批列表页面，集中管理所有审批请求
 - **多项目支持** — 项目白名单、路径隔离、Git 分支/未提交变更可视化
 - **移动端 PWA** — 可安装的渐进式 Web 应用
-- **Tailscale 内网** — 零配置内网远程访问
+- **Cloudflare Tunnel** — 无需公网 IP，手机在任何网络下都可访问主机
 - **统一设计系统** — CSS 变量驱动的 token 体系 + 17 个共享 UI 组件
 
 ## 快速开始
@@ -31,8 +32,8 @@
 
 - Node.js 20+
 - Claude Code CLI (`~/.local/bin/claude`)
-- Linux Host（macOS/Windows Tailscale 代理亦可）
-- Tailscale（可选，用于远程访问）
+- Linux Host
+- cloudflared（用于远程访问，见下方安装说明）
 
 ### 安装
 
@@ -43,27 +44,126 @@ npm install
 npm run build
 ```
 
-### 启动
+### 安装 cloudflared
 
 ```bash
-# 启动 Daemon (8787)
+mkdir -p ~/bin
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o ~/bin/cloudflared
+chmod +x ~/bin/cloudflared
+```
+
+## 日常使用
+
+### 启动步骤（电脑端）
+
+按顺序执行三个命令，每个在独立终端中运行（或使用 `setsid`/`nohup` 后台运行）：
+
+```bash
+# 1. 启动 Daemon（后端服务，端口 8787）
 npm run dev:daemon
 
-# 启动主机管理页 (4173)
-npm run dev:local-admin
-
-# 启动移动端 Web (4174)
+# 2. 启动移动端 Web 开发服务器（端口 4174，自动代理 API 和 WebSocket 到 Daemon）
 npm run dev:mobile-web
+
+# 3. 启动 Cloudflare Tunnel（将 4174 端口暴露到公网）
+systemctl --user start cloudflared-tunnel
+```
+
+启动完成后，查看当前 Tunnel URL：
+
+```bash
+cat ~/.agent-console/tunnel-url.txt
+```
+
+输出类似：`https://some-words-here.trycloudflare.com`
+
+> 首次使用需要先配置 systemd 服务，见下方"配置 Tunnel 服务"一节。
+
+### 手机端使用
+
+1. 在手机浏览器中打开 Tunnel URL
+2. 可以正常浏览项目、创建会话、对话、查看实时输出
+3. 建议用浏览器"添加到主屏幕"功能，以 PWA 模式使用体验更佳
+4. 首页会显示延迟 badge（<150ms 绿色良好，150-400ms 黄色一般，>400ms 红色较差）
+
+### 主机管理页（可选）
+
+```bash
+# 启动主机管理页（端口 4173，仅本机访问）
+npm run dev:local-admin
+# 浏览器打开 http://localhost:4173
+```
+
+### 常用运维命令
+
+```bash
+# 查看当前 Tunnel URL（手机访问地址）
+cat ~/.agent-console/tunnel-url.txt
+
+# 查看 Tunnel 状态
+systemctl --user status cloudflared-tunnel
+
+# 重启 Tunnel（URL 会变，需要重新在手机上打开新 URL）
+systemctl --user restart cloudflared-tunnel
+
+# 停止 Tunnel
+systemctl --user stop cloudflared-tunnel
+
+# 查看 Tunnel 日志
+tail -50 ~/.agent-console/tunnel.log
+```
+
+### URL 变了怎么办
+
+Cloudflare Quick Tunnel 的 URL 在以下情况会变：
+- 手动重启 Tunnel 服务（`systemctl --user restart cloudflared-tunnel`）
+- cloudflared 进程崩溃后自动重启
+
+查看新 URL：
+
+```bash
+cat ~/.agent-console/tunnel-url.txt
+```
+
+在电脑上打开这个文件，把新 URL 发送到手机即可。正常使用中 Tunnel 不会自己重启，URL 保持不变。
+
+### 配置 Tunnel 服务（首次使用）
+
+如果 `systemctl --user start cloudflared-tunnel` 提示服务不存在，需要手动配置：
+
+```bash
+# 确保 systemd 用户目录存在
+mkdir -p ~/.config/systemd/user
+
+# 服务文件已包含在项目中，创建软链接
+ln -sf /home/sikm/Project/AI-Project/RemoteCC-console/scripts/cloudflared-tunnel.service \
+       ~/.config/systemd/user/cloudflared-tunnel.service
+
+# 重新加载并启用
+systemctl --user daemon-reload
+systemctl --user enable cloudflared-tunnel
+```
+
+### 网络架构
+
+```
+手机浏览器/PWA
+    ↓ HTTPS
+Cloudflare Edge (自动分配 *.trycloudflare.com 域名)
+    ↓ Tunnel (加密，http2 协议)
+Vite Dev Server (4174，proxy API/WS → Daemon)
+    ↓
+Daemon (8787) — REST API + WebSocket + Claude Code
 ```
 
 ### 配置
 
 | 环境变量 | 默认值 | 说明 |
 |----------|--------|------|
-| `AGENT_CONSOLE_HOST` | `0.0.0.0` | 监听地址 |
-| `AGENT_CONSOLE_PORT` | `8787` | 监听端口 |
-| `VITE_DAEMON_URL` | `http://localhost:8787` | 前端连接地址 |
-| `VITE_DAEMON_WS_URL` | `ws://localhost:8787` | WebSocket 地址 |
+| `AGENT_CONSOLE_HOST` | `127.0.0.1` | Daemon 监听地址 |
+| `AGENT_CONSOLE_PORT` | `8787` | Daemon 监听端口 |
+| `VITE_DAEMON_URL` | 空（同源） | 前端连接地址，留空走 Vite proxy |
+| `VITE_DAEMON_WS_URL` | 空（同源） | WebSocket 地址，留空走 Vite proxy |
 
 ## 系统架构
 
@@ -80,6 +180,7 @@ npm run dev:mobile-web
 │             │  Tailwind CSS v4                │               │
 └─────────────┼────────────────────────────────┼───────────────┘
               │ REST API / WebSocket           │
+              │ (via Cloudflare Tunnel)         │
 ┌─────────────▼────────────────────────────────▼───────────────┐
 │  Daemon (8787) — Fastify 5                                   │
 │  ┌────────────┬────────────┬────────────┬────────────────┐   │
@@ -218,6 +319,7 @@ WS 事件 → session-store (Zustand per-session)
 |------|------|------|
 | `/api/host/info` | GET | 主机信息（hostname、OS、Claude auth、Tailscale） |
 | `/api/host/health` | GET | 健康检查 |
+| `/api/host/ping` | GET | 延迟测试（返回服务器时间戳） |
 | `/api/projects` | GET/POST | 项目列表 / 创建 |
 | `/api/projects/:id` | PATCH/DELETE | 更新 / 删除项目 |
 | `/api/projects/:id/sessions` | GET/POST | 会话列表 / 创建会话 |
@@ -248,6 +350,7 @@ Daemon 以 `claude -p` 模式运行（无 stdin 交互），移动端**无法注
 
 ```bash
 npm run build          # 构建所有 workspace
+npm run build:prod     # 生产构建（mobile-web 输出到 daemon/mobile-web-dist，daemon 可直接 serve）
 npm run typecheck      # TypeScript 类型检查
 npm run dev:daemon     # 启动 Daemon (8787)
 npm run dev:local-admin # 启动管理页 (4173)
@@ -260,6 +363,7 @@ npm run dev:mobile-web  # 启动移动端 (4174)
 - [技术架构](./doc/dev-path-a.md)
 - [前端开发指南](./doc/frontend-dev.md)
 - [后端开发指南](./doc/backend-dev.md)
+- [网络方案与 Tunnel 配置](./doc/network-troubleshooting.md)
 - [Phase 0 预研归档](./doc/phase0-research-archive.md)
 
 ## License

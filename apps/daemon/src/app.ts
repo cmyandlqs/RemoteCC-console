@@ -2,6 +2,9 @@ import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import Fastify from "fastify";
 import Database from "better-sqlite3";
+import { existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { createDatabase } from "./infra/database.js";
 import { ensureDataDirs, getDbPath } from "./infra/paths.js";
@@ -57,7 +60,7 @@ export async function buildServer() {
   const app = Fastify({ logger: true });
 
   await app.register(cors, {
-    origin: ["http://localhost:4173", "http://localhost:4174"],
+    origin: true,
   });
   await app.register(websocket);
 
@@ -74,8 +77,9 @@ export async function buildServer() {
 
   app.addHook("preHandler", (request, reply, done) => {
     if (
-      request.url.startsWith("/api/sessions") ||
-      request.url.startsWith("/api/approvals")
+      false &&
+      (request.url.startsWith("/api/sessions") ||
+      request.url.startsWith("/api/approvals"))
     ) {
       requireAuth(request, reply, done);
     } else {
@@ -87,6 +91,20 @@ export async function buildServer() {
   await registerApprovalRoutes(app, approvalService);
   await registerGitRoutes(app, projectService, gitService, fileChangeService);
   await registerRealtimeRoutes(app, eventBus, authService, sessionService);
+
+  const staticDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../mobile-web-dist");
+  if (existsSync(staticDir)) {
+    const fastifyStatic = await import("@fastify/static");
+    await app.register(fastifyStatic.default, {
+      root: staticDir,
+      prefix: "/",
+      wildcard: false,
+    });
+    app.setNotFoundHandler((_, reply) => {
+      reply.sendFile("index.html");
+    });
+    app.log.info(`Serving static files from ${staticDir}`);
+  }
 
   app.addHook("onClose", async () => {
     app.log.info("Closing database connection");

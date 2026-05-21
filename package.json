@@ -12,6 +12,7 @@
   },
   "scripts": {
     "build": "npm run build --workspaces --if-present",
+    "build:prod": "npm run build --workspace @agent-console/shared-types --workspace @agent-console/shared-ui --workspace @agent-console/claude-adapter && npm run build --workspace @agent-console/mobile-web && npm run build --workspace @agent-console/daemon",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "dev:daemon": "npm run dev --workspace @agent-console/daemon",
     "dev:local-admin": "npm run dev --workspace @agent-console/local-admin",

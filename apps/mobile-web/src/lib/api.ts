@@ -8,7 +8,7 @@ import type {
 export type { HostSummary, Project, Session, ApprovalRecord };
 
 // @ts-ignore - Vite env types
-const BASE = import.meta.env.VITE_DAEMON_URL ?? "http://localhost:8787";
+const BASE = import.meta.env.VITE_DAEMON_URL ?? "";
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {};
@@ -32,6 +32,7 @@ export type ApiResponse<T> = { data: T } | { error: { code: string; message: str
 
 export const apiClient = {
   getHostInfo: () => api<{ data: HostSummary }>("/api/host/info"),
+  ping: () => api<{ data: { timestamp: number } }>("/api/host/ping"),
 
   listProjects: () => api<{ data: Project[] }>("/api/projects"),
   createSession: (projectId: string, prompt: string, title?: string) =>

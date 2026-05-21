@@ -106,6 +106,10 @@ export type HealthCheck = {
   timestamp: string;
 };
 
+export type PingResponse = {
+  timestamp: number;
+};
+
 export type GitStatus = {
   branch: string | null;
   staged: number;

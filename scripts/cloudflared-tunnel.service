@@ -1,0 +1,14 @@
+[Unit]
+Description=Cloudflare Quick Tunnel for Agent Console
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/sikm/Project/AI-Project/RemoteCC-console/scripts/start-tunnel.sh
+Restart=always
+RestartSec=5
+Environment=PATH=/home/sikm/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target

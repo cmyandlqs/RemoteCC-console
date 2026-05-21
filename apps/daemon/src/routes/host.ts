@@ -15,6 +15,10 @@ export async function registerHostRoutes(
     return { data: hostService.getHealth() };
   });
 
+  app.get("/api/host/ping", async () => {
+    return { data: { timestamp: Date.now() } };
+  });
+
   app.get("/api/host", async () => {
     await hostService.refreshExternalStates();
     return { data: hostService.getSummary() };

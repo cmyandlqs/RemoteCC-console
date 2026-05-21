@@ -1,6 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../lib/api";
+import { useLatency } from "../lib/use-latency";
 import { Card, StatusBadge, MetricRow, MetricGrid, LoadingState, ErrorState } from "@agent-console/shared-ui";
+
+const latencyVariantMap = { healthy: "online" as const, moderate: "warning" as const, poor: "error" as const, unknown: "neutral" as const };
+const latencyLabelMap = { healthy: "良好", moderate: "一般", poor: "较差", unknown: "—" };
 
 export function OverviewPage() {
   const { data, isLoading, error, refetch } = useQuery({
@@ -8,6 +12,8 @@ export function OverviewPage() {
     queryFn: apiClient.getHostInfo,
     refetchInterval: 30_000,
   });
+
+  const latency = useLatency(apiClient.ping);
 
   const summary = data?.data;
 
@@ -40,6 +46,9 @@ export function OverviewPage() {
 
       {/* Status pills */}
       <div className="flex flex-wrap gap-2 mb-6">
+        <StatusBadge variant={latencyVariantMap[latency.level]}>
+          延迟 {latency.rtt != null ? `${latency.rtt}ms ${latencyLabelMap[latency.level]}` : latencyLabelMap[latency.level]}
+        </StatusBadge>
         <StatusBadge variant={summary?.claudeAuthState === "available" ? "online" : "warning"}>
           Claude {summary?.claudeAuthState === "available" ? "已认证" : "未认证"}
         </StatusBadge>

@@ -34,6 +34,7 @@ export type ApiResponse<T> = { data: T } | { error: { code: string; message: str
 
 export const apiClient = {
   getHostInfo: () => api<{ data: HostSummary }>("/api/host/info"),
+  ping: () => api<{ data: { timestamp: number } }>("/api/host/ping"),
 
   listProjects: () => api<{ data: Project[] }>("/api/projects"),
   createProject: (name: string, rootPath: string) =>

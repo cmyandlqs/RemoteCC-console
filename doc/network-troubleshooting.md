@@ -172,9 +172,64 @@ Cloudflare Edge
 
 ### 需要的改动
 
-- [ ] Daemon 添加静态文件服务（serve 前端 build 产物）
-- [ ] 配置 Cloudflare Tunnel
-- [ ] 前端 build 时注入正确的 `VITE_DAEMON_URL`（相对路径，同源）
+- [x] Daemon 添加静态文件服务（serve 前端 build 产物）— `@fastify/static`
+- [ ] 配置 Cloudflare Tunnel（正式命名 Tunnel）
+- [x] 前端 build 时 `VITE_DAEMON_URL` 为空（相对路径，同源）
+- [x] 延迟测试功能（`/api/host/ping` 端点 + 前端延迟显示）
+
+### Cloudflare Tunnel 正式配置步骤
+
+**前提**：你需要一个域名（在 Cloudflare 管理）。便宜的 `.top` 域名一年几块钱。
+
+1. 注册 [Cloudflare 账号](https://dash.cloudflare.com)，添加你的域名
+2. 安装 cloudflared 并登录：
+   ```bash
+   cloudflared tunnel login
+   ```
+3. 创建命名 Tunnel：
+   ```bash
+   cloudflared tunnel create agent-console
+   ```
+4. 配置路由（`~/.cloudflared/config.yml`）：
+   ```yaml
+   tunnel: <TUNNEL_ID>
+   credentials-file: /home/sikm/.cloudflared/<TUNNEL_ID>.json
+
+   ingress:
+     - hostname: console.your-domain.com
+       service: http://localhost:8787
+     - service: http_status:404
+   ```
+5. 添加 DNS 记录：
+   ```bash
+   cloudflared tunnel route dns agent-console console.your-domain.com
+   ```
+6. 启动 Tunnel：
+   ```bash
+   cloudflared tunnel run agent-console
+   ```
+7. 设置开机自启（可选）：
+   ```bash
+   cloudflared service install
+   ```
+
+### 生产部署
+
+```bash
+# 构建（mobile-web 输出到 apps/daemon/mobile-web-dist）
+npm run build:prod
+
+# 启动 daemon（自动 serve 静态文件）
+cd apps/daemon
+AGENT_CONSOLE_HOST=127.0.0.1 AGENT_CONSOLE_PORT=8787 node dist/index.js
+```
+
+### 开发调试（Quick Tunnel）
+
+```bash
+# 一行命令快速测试（无需域名）
+cloudflared tunnel --protocol http2 --url http://localhost:4174
+```
 
 ---
 
@@ -190,6 +245,6 @@ Cloudflare Edge
 
 ## 建议下一步
 
-1. **立即**：用 ngrok 快速验证手机能否正常使用完整功能
-2. **短期**：配置 Cloudflare Tunnel（免费、稳定、长期可用）
-3. **长期**：Cloudflare Tunnel + 前端静态文件集成到 Daemon
+1. ~~**立即**：用 ngrok/Quick Tunnel 快速验证手机能否正常使用完整功能~~ 已完成
+2. **当前**：配置 Cloudflare 正式 Tunnel（需要域名）
+3. ~~**长期**：Cloudflare Tunnel + 前端静态文件集成到 Daemon~~ 已完成

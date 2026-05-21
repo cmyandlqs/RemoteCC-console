@@ -18,7 +18,20 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    outDir: "../mobile-web-dist",
+    emptyOutDir: true,
+  },
   server: {
     port: 4174,
+    host: "0.0.0.0",
+    allowedHosts: true,
+    hmr: {
+      host: "100.112.95.15",
+    },
+    proxy: {
+      "/api": "http://localhost:8787",
+      "/ws": { target: "ws://localhost:8787", ws: true },
+    },
   },
 });

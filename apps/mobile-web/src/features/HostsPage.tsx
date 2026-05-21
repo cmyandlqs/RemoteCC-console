@@ -1,7 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiClient } from "../lib/api";
+import { useLatency } from "../lib/use-latency";
 import { Card, StatusDot, StatusBadge, EmptyState, LoadingState, ErrorState } from "@agent-console/shared-ui";
+
+const latencyVariantMap = { healthy: "online" as const, moderate: "warning" as const, poor: "error" as const, unknown: "neutral" as const };
+const latencyLabelMap = { healthy: "良好", moderate: "一般", poor: "较差", unknown: "—" };
 
 export function HostsPage() {
   const { data, isLoading, error, refetch } = useQuery({
@@ -14,6 +18,8 @@ export function HostsPage() {
     queryKey: ["projects"],
     queryFn: apiClient.listProjects,
   });
+
+  const latency = useLatency(apiClient.ping);
 
   const summary = data?.data;
   const projects = projectsData?.data ?? [];
@@ -33,6 +39,9 @@ export function HostsPage() {
         </div>
 
         <div className="flex flex-wrap gap-2 mt-3">
+          <StatusBadge variant={latencyVariantMap[latency.level]}>
+            {latency.rtt != null ? `${latency.rtt}ms` : latencyLabelMap[latency.level]}
+          </StatusBadge>
           <StatusBadge variant={summary?.claudeAuthState === "available" ? "online" : "warning"}>
             Claude {summary?.claudeAuthState === "available" ? "已认证" : "未认证"}
           </StatusBadge>

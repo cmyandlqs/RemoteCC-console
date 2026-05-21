@@ -1,5 +1,11 @@
 // @ts-ignore - Vite env types
-const WS_BASE = (import.meta.env.VITE_DAEMON_WS_URL ?? "ws://localhost:8787").replace("http", "ws");
+const WS_BASE = (import.meta.env.VITE_DAEMON_WS_URL ?? "").replace("http", "ws");
+
+function resolveWsBase(): string {
+  if (WS_BASE) return WS_BASE;
+  const proto = globalThis.location?.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${globalThis.location?.host}`;
+}
 
 export type { WsEnvelope, WsEventType, WsClientMessage } from "@agent-console/shared-types";
 
@@ -21,7 +27,7 @@ export class WsClient {
     if (state === WebSocket.OPEN || state === WebSocket.CONNECTING || this.connecting) return;
     this.connecting = true;
 
-    const base = url ?? `${WS_BASE}/ws`;
+    const base = url ?? `${resolveWsBase()}/ws`;
     this.ws = new WebSocket(base);
 
     this.ws.onopen = () => {

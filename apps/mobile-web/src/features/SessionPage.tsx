@@ -169,24 +169,24 @@ export function SessionPage() {
           break;
         }
         case "session.command.started": {
-          const p = envelope.payload as { toolUseId?: string; toolName?: string; input?: string };
+          const p = envelope.payload as { toolUseId?: string; toolName?: string; input?: unknown };
           if (p.toolUseId && p.toolName) {
             store.addToolCall(sessionId, {
               toolUseId: p.toolUseId,
               toolName: p.toolName,
               state: "running",
-              input: p.input,
+              input: typeof p.input === "string" ? p.input : JSON.stringify(p.input, null, 2),
               timestamp: envelope.ts,
             });
           }
           break;
         }
         case "session.command.completed": {
-          const p = envelope.payload as { toolUseId?: string; output?: string; isError?: boolean };
+          const p = envelope.payload as { toolUseId?: string; output?: unknown; isError?: boolean };
           if (p.toolUseId) {
             store.updateToolCall(sessionId, p.toolUseId, {
               state: p.isError ? "error" : "completed",
-              output: p.output,
+              output: typeof p.output === "string" ? p.output : JSON.stringify(p.output, null, 2),
             });
           }
           break;

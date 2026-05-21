@@ -11,6 +11,12 @@ type Props = {
   className?: string;
 };
 
+function safeContent(value: ReactNode): ReactNode {
+  if (value == null || typeof value === "string" || typeof value === "number") return value;
+  if (typeof value === "object") return JSON.stringify(value, null, 2);
+  return String(value);
+}
+
 const stateMap: Record<ToolCallState, { icon: string; label: string; bar: string; text: string }> = {
   pending: { icon: "⏳", label: "Pending", bar: "bg-[var(--color-text-muted)]", text: "text-[var(--color-text-tertiary)]" },
   running: { icon: "▸", label: "Running", bar: "bg-[var(--color-accent)]", text: "text-[var(--color-accent)]" },
@@ -62,7 +68,7 @@ export function ToolCallCard({ toolName, state, input, output, className = "" }:
                   Input
                 </span>
                 <pre className="mt-1 text-xs font-mono text-[var(--color-text-secondary)] bg-[var(--color-bg-base)] rounded-md p-2 overflow-x-auto">
-                  {input}
+                  {safeContent(input)}
                 </pre>
               </div>
             )}
@@ -72,7 +78,7 @@ export function ToolCallCard({ toolName, state, input, output, className = "" }:
                   Output
                 </span>
                 <pre className="mt-1 text-xs font-mono text-[var(--color-text-secondary)] bg-[var(--color-bg-base)] rounded-md p-2 overflow-x-auto">
-                  {output}
+                  {safeContent(output)}
                 </pre>
               </div>
             )}
